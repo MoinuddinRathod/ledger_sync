@@ -3,9 +3,13 @@ import 'package:get/get.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/custome_labeled_field.dart';
 import '../controllers/master_account_controller.dart';
+import 'login_screen.dart'; // BearAnimationWidget + BearState
 
 class CreateAccountScreen extends GetView<MasterAccountController> {
-  const CreateAccountScreen({Key? key}) : super(key: key);
+  const CreateAccountScreen({super.key});
+
+  // GlobalKey so we can change the bear's state from focus callbacks
+  static final _bearKey = GlobalKey<BearAnimationWidgetState>();
 
   @override
   Widget build(BuildContext context) {
@@ -27,17 +31,16 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Bear — NOT inside Obx, driven via GlobalKey
                 Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Image.asset("assets/images/logo.png", height: 56),
+                  child: BearAnimationWidget(
+                    key: _bearKey,
+                    height: 180,
+                    width: 220,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
+
                 Text(
                   "Create Master Account",
                   textAlign: TextAlign.center,
@@ -58,7 +61,7 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                
+
                 // Form Card
                 Container(
                   padding: const EdgeInsets.all(24),
@@ -66,12 +69,16 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                     color: isDark ? const Color(0xFF1A1C35) : Colors.white,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: isDark ? const Color(0xFF2A2D52) : const Color(0xFFE4E6FF),
+                      color: isDark
+                          ? const Color(0xFF2A2D52)
+                          : const Color(0xFFE4E6FF),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+                        color: Colors.black.withValues(
+                          alpha: isDark ? 0.2 : 0.04,
+                        ),
                         blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
@@ -80,11 +87,25 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Account Name ── bear looks down (isChecking)
                       CustomLabeledTextField(
                         controller: controller.accountNameController,
                         label: "Account Name",
                         hintText: "Enter a name for this account",
                         prefixIcon: Icons.person_outline_rounded,
+                        onFocusChange: (hasFocus) {
+                          _bearKey.currentState?.setBearState(
+                            hasFocus ? BearState.checking : BearState.idle,
+                          );
+                        },
+                        onChanged: (val) {
+                          if (val.isNotEmpty) {
+                            _bearKey.currentState?.setBearState(BearState.speaking);
+                            controller.startTypingTimer(() {
+                              _bearKey.currentState?.setBearState(BearState.idle);
+                            });
+                          }
+                        },
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return "Please enter an account name";
@@ -93,6 +114,8 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                         },
                       ),
                       const SizedBox(height: 20),
+
+                      // ── PIN ── bear puts hands up (isHandsUp)
                       Obx(
                         () => CustomLabeledTextField(
                           controller: controller.pinController,
@@ -103,6 +126,23 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                           isObscure: !controller.isPinVisible.value,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
+                          onFocusChange: (hasFocus) {
+                            _bearKey.currentState?.setBearState(
+                              hasFocus ? BearState.handsUp : BearState.idle,
+                            );
+                          },
+                          onChanged: (val) {
+                            if (val.isNotEmpty) {
+                              _bearKey.currentState?.setBearState(
+                                controller.isPinVisible.value
+                                    ? BearState.checking
+                                    : BearState.handsUp,
+                              );
+                              controller.startTypingTimer(() {
+                                _bearKey.currentState?.setBearState(BearState.idle);
+                              });
+                            }
+                          },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return "Please enter your PIN";
@@ -113,11 +153,19 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                             return null;
                           },
                           onObscureTap: () {
-                            controller.isPinVisible.value = !controller.isPinVisible.value;
+                            controller.isPinVisible.value =
+                                !controller.isPinVisible.value;
+                            _bearKey.currentState?.setBearState(
+                              controller.isPinVisible.value
+                                  ? BearState.checking
+                                  : BearState.handsUp,
+                            );
                           },
                         ),
                       ),
                       const SizedBox(height: 20),
+
+                      // ── Confirm PIN ── bear puts hands up (isHandsUp)
                       Obx(
                         () => CustomLabeledTextField(
                           controller: controller.confirmPinController,
@@ -128,6 +176,23 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                           isObscure: !controller.isConfirmPinVisible.value,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
+                          onFocusChange: (hasFocus) {
+                            _bearKey.currentState?.setBearState(
+                              hasFocus ? BearState.handsUp : BearState.idle,
+                            );
+                          },
+                          onChanged: (val) {
+                            if (val.isNotEmpty) {
+                              _bearKey.currentState?.setBearState(
+                                controller.isConfirmPinVisible.value
+                                    ? BearState.checking
+                                    : BearState.handsUp,
+                              );
+                              controller.startTypingTimer(() {
+                                _bearKey.currentState?.setBearState(BearState.idle);
+                              });
+                            }
+                          },
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return "Please confirm your PIN";
@@ -138,11 +203,18 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                             return null;
                           },
                           onObscureTap: () {
-                            controller.isConfirmPinVisible.value = !controller.isConfirmPinVisible.value;
+                            controller.isConfirmPinVisible.value =
+                                !controller.isConfirmPinVisible.value;
+                            _bearKey.currentState?.setBearState(
+                              controller.isConfirmPinVisible.value
+                                  ? BearState.checking
+                                  : BearState.handsUp,
+                            );
                           },
                         ),
                       ),
                       const SizedBox(height: 12),
+
                       Obx(
                         () => Theme(
                           data: Theme.of(context).copyWith(
@@ -157,7 +229,9 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                               "I agree to the terms and privacy policy",
                               style: TextStyle(
                                 fontSize: 13,
-                                color: theme.colorScheme.onSurface.withValues(alpha: 0.8),
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.8,
+                                ),
                               ),
                             ),
                             activeColor: theme.colorScheme.primary,

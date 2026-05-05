@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/service/local_db_service/local_db_service.dart';
@@ -23,10 +24,40 @@ class MasterAccountController extends GetxController {
   final RxList<AccountModel> accounts = <AccountModel>[].obs;
   final Rxn<AccountModel> selectedAccount = Rxn<AccountModel>();
 
+  // ── Bear Animation Callbacks ──
+  // These are set by LoginScreen every build (safe — just assignments).
+  Function(Future<void> Function() onComplete)? onLoginSuccess;
+  Function? onLoginFail;
+
+  // ── Typing Debouncer ──
+  Timer? _typingTimer;
+  void startTypingTimer(VoidCallback onStopTyping) {
+    _typingTimer?.cancel();
+    _typingTimer = Timer(const Duration(milliseconds: 1500), onStopTyping);
+  }
+
   // ── Services ──
   final PasswordEncryptionDecryptionService _encDecService =
       PasswordEncryptionDecryptionService.instance;
   final SessionService _sessionService = SessionService.instance;
+
+  // ── BANK LIST ──
+  final RxList<Map<String, dynamic>> bankList = [
+    {"name": "State Bank of India", "logo": "logo_sbi_bank.png"},
+    {"name": "HDFC Bank", "logo": "logo_hdfc_bank.png"},
+    {"name": "ICICI Bank", "logo": "logo_icici_bank.png"},
+    {"name": "Axis Bank", "logo": "logo_axis_bank.png"},
+    {"name": "Kotak Mahindra Bank", "logo": "logo_kotak_bank.png"},
+    {"name": "Yes Bank", "logo": "logo_yes_bank.png"},
+    {"name": "Bank of India", "logo": "logo_boi_bank.png"},
+    {"name": "IDFC Bank", "logo": "logo_idfc_bank.png"},
+    {"name": "IDBI Bank", "logo": "logo_idbi_bank.png"},
+    {"name": "Union Bank of India", "logo": "logo_union_bank.png"},
+    {"name": "Bank of Baroda", "logo": "logo_bob_bank.png"},
+  ].obs;
+
+  RxList<Map<String, dynamic>> filteredBankList = <Map<String, dynamic>>[].obs;
+  RxInt selectedBankIndex = (-1).obs;
 
   @override
   void onInit() {
@@ -112,45 +143,49 @@ class MasterAccountController extends GetxController {
   // 4. Save to LocalStorageService (your existing service)
   // 5. Navigate to home
   // ─────────────────────────────────────────────
+
+  void togglePinVisibility() {
+    isPinVisible.value = !isPinVisible.value;
+  }
+
+  // ─────────────────────────────────────────────
+  // LOGIN METHOD
+  // ─────────────────────────────────────────────
   Future<void> login() async {
     if (!formKey.currentState!.validate()) return;
 
     isLoading.value = true;
 
-    // Step 1 — hash the entered PIN
     final hashedPin = _encDecService.hashPin(pinController.text.trim());
 
-    // Step 2 — compare hash vs stored hash in SQLite
     final accountId = await DatabaseHelper.instance.checkLogin(
       accountNameController.text.trim(),
       hashedPin,
     );
 
     if (accountId != -1) {
-      // Step 3 — generate token + save in FlutterSecureStorage
-      await _sessionService.saveSession(
-        accountId: accountId,
-        accountName: accountNameController.text.trim(),
-      );
-
-      // Step 4 — also update your existing LocalStorageService
-      final local = LocalStorageService.instance;
-      local.accountName = accountNameController.text.trim();
-      local.isLoggedIn = true;
-      local.accountId = accountId;
-
-      clearControllers();
-
-      // Step 5 — navigate
-      Get.offAllNamed(AppRoutes.homeScreen);
+      // Bear celebrates → navigation fires only after animation ends
+      onLoginSuccess?.call(() async {
+        await _sessionService.saveSession(
+          accountId: accountId,
+          accountName: accountNameController.text.trim(),
+        );
+        final local = LocalStorageService.instance;
+        local.accountName = accountNameController.text.trim();
+        local.isLoggedIn = true;
+        local.accountId = accountId;
+        clearControllers();
+        Get.offAllNamed(AppRoutes.homeScreen);
+      });
     } else {
+      onLoginFail?.call();
+      await Future.delayed(const Duration(milliseconds: 1500));
       SnackbarService.showError(
         title: 'Login failed',
         message: "Incorrect account name or PIN",
       );
+      isLoading.value = false;
     }
-
-    isLoading.value = false;
   }
 
   // ─────────────────────────────────────────────
@@ -212,24 +247,8 @@ class MasterAccountController extends GetxController {
   }
 
   // ─────────────────────────────────────────────
-  // BANK LIST (unchanged from your original)
+  // BANK METHODS
   // ─────────────────────────────────────────────
-  final RxList<Map<String, dynamic>> bankList = [
-    {"name": "State Bank of India", "logo": "logo_sbi_bank.png"},
-    {"name": "HDFC Bank", "logo": "logo_hdfc_bank.png"},
-    {"name": "ICICI Bank", "logo": "logo_icici_bank.png"},
-    {"name": "Axis Bank", "logo": "logo_axis_bank.png"},
-    {"name": "Kotak Mahindra Bank", "logo": "logo_kotak_bank.png"},
-    {"name": "Yes Bank", "logo": "logo_yes_bank.png"},
-    {"name": "Bank of India", "logo": "logo_boi_bank.png"},
-    {"name": "IDFC Bank", "logo": "logo_idfc_bank.png"},
-    {"name": "IDBI Bank", "logo": "logo_idbi_bank.png"},
-    {"name": "Union Bank of India", "logo": "logo_union_bank.png"},
-    {"name": "Bank of Baroda", "logo": "logo_bob_bank.png"},
-  ].obs;
-
-  RxList<Map<String, dynamic>> filteredBankList = <Map<String, dynamic>>[].obs;
-  RxInt selectedBankIndex = (-1).obs;
 
   void chooseBank(String bankName) {
     selectedBankIndex.value = bankList.indexWhere(
