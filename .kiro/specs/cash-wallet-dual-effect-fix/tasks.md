@@ -1,0 +1,151 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Cash Wallet Dual-Effect and Virtual Entry Matching Failure
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: For deterministic bugs, scope the property to the concrete failing case(s) to ensure reproducibility
+  - Test implementation details from Bug Condition in design:
+    - Import a DR transaction tagged as "Cash" (e.g., ATM withdrawal, ₹5000)
+    - Verify cash wallet balance remains unchanged (bug condition)
+    - Verify no "Cash Withdrawn From Bank" transaction is created (bug condition)
+    - Import a CR transaction tagged as "Cash" (e.g., cash deposit, ₹2000)
+    - Verify cash wallet balance remains unchanged (bug condition)
+    - Verify no "Cash Deposited To Bank" transaction is created (bug condition)
+    - Create a pending virtual entry with tag "Salary" (keywords: ["salary", "payment"])
+    - Import a transaction with narration "Salary payment from John" tagged as "Salary"
+    - Verify virtual entry remains in "pending" status with no match (bug condition)
+  - The test assertions should match the Expected Behavior Properties from design:
+    - DR transaction should increase cash wallet balance by transaction amount
+    - CR transaction should decrease cash wallet balance by transaction amount (clamped to zero)
+    - Virtual entry should be matched and appear in matchedEntries list
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
+  - Document counterexamples found to understand root cause:
+    - Likely causes: incorrect column names in CashTagService, broken transaction context, missing error handling
+    - Check database logs for silent insert failures
+    - Verify column name constants match database schema
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Non-Cash Transaction and Service Initialization Behavior
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs:
+    - Import transactions NOT tagged with "Cash" (e.g., "Groceries", "Salary", "Rent")
+    - Observe that transactions are saved to bank account correctly
+    - Observe that bank account balance is recomputed correctly via recomputeAndSave()
+    - Observe that DashboardController and TagsController are refreshed
+    - Observe that continuity checks, overlap warnings, and reconciliation checks run
+    - Observe that navigation flow completes successfully
+    - Import transactions when CashTagService is not initialized
+    - Observe that import completes without crashing (graceful degradation)
+    - Import transactions when no virtual entries exist
+    - Observe that import completes without crashing
+  - Write property-based tests capturing observed behavior patterns from Preservation Requirements:
+    - For all transactions NOT tagged with Cash, verify bank account balance computation is unchanged
+    - For all imports, verify continuity checks, overlap warnings, and reconciliation checks run
+    - For all imports, verify DashboardController and TagsController are refreshed
+    - For all imports when services are not initialized, verify graceful degradation (no crashes)
+  - Property-based testing generates many test cases for stronger guarantees
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
+
+- [x] 3. Fix cash wallet dual-effect and virtual entry matching
+
+  - [x] 3.1 Fix CashTagService column names and transaction context
+    - Open `lib/core/service/cash_tag_service.dart`
+    - Import all required constants from `app_constants.dart` at the top of the file
+    - In `applyDualEffect()` method, replace all lowercase column names with uppercase constants:
+      - `'account_id'` → `ACCOUNT_ID`
+      - `'transaction_type'` → `CASH_WALLET_TRANSACTION_TYPE`
+      - `'tag_id'` → `CASH_WALLET_TRANSACTION_TAG_ID`
+      - `'amount'` → `AMOUNT` (verify this is correct constant name)
+      - `'transaction_note'` → `TRANSACTION_NOTE`
+      - `'date_added'` → `DATE_ADDED`
+      - `'created_at'` → `CREATED_AT`
+      - `'updated_at'` → `UPDATED_AT`
+      - `'deleted_at'` → `DELETED_AT`
+      - `'current_balance'` → `CASH_WALLET_CURRENT_BALANCE`
+    - Remove the `db.transaction()` wrapper and execute operations sequentially
+    - Add null checks for `cashWallet` result before accessing `current_balance`
+    - Add detailed error logging to capture exact failure points:
+      - "Failed to get cash wallet"
+      - "Failed to insert cash wallet transaction"
+      - "Failed to update cash wallet balance"
+    - Add success logging with transaction details
+    - _Bug_Condition: isBugCondition(input) where input.hasCashTaggedTransactions AND cashWalletBalance is unchanged_
+    - _Expected_Behavior: For DR transactions, cash wallet balance increases by txnAmount and "Cash Withdrawn From Bank" transaction is created. For CR transactions, cash wallet balance decreases by txnAmount (clamped to zero) and "Cash Deposited To Bank" transaction is created._
+    - _Preservation: Non-Cash transactions and service initialization handling must remain unchanged_
+    - _Requirements: 2.1, 2.2, 2.5, 2.7_
+
+  - [x] 3.2 Add error handling to ReviewTransactionsController
+    - Open `lib/features/home/controllers/review_transactions_controller.dart`
+    - In `_applyCashTagDualEffect()` method, wrap the `applyDualEffect()` call in try-catch
+    - Add error logging with transaction details for debugging
+    - Add success logging showing number of cash transactions processed
+    - Ensure method returns gracefully if CashTagService is not initialized
+    - _Bug_Condition: isBugCondition(input) where _applyCashTagDualEffect() is called but produces no observable effect_
+    - _Expected_Behavior: Cash wallet transactions are created for all Cash-tagged imports, with detailed logging for success and failure cases_
+    - _Preservation: Existing transaction import flow must remain unchanged_
+    - _Requirements: 2.1, 2.2, 2.5, 2.7_
+
+  - [x] 3.3 Verify and improve virtual entry matching logic
+    - Open `lib/features/virtual_entries/controller/virtual_entries_controller.dart`
+    - Review `runAutoMatching()` implementation for correctness
+    - Add detailed logging to show:
+      - Number of pending virtual entries found
+      - Number of imported transactions scanned
+      - Number of matches found
+      - Match criteria used (keyword, amount, date range)
+    - Consider persisting matches to database or displaying in a dialog after import
+    - Ensure method returns gracefully if no virtual entries exist
+    - _Bug_Condition: isBugCondition(input) where input.hasPendingVirtualEntries AND virtualEntryStatus is unchanged_
+    - _Expected_Behavior: Virtual entries are matched with imported transactions based on keyword matching, with closest amount match preferred_
+    - _Preservation: Manual virtual entry creation and deletion must remain unchanged_
+    - _Requirements: 2.3, 2.4, 2.6, 2.7_
+
+  - [x] 3.4 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Cash Wallet Dual-Effect and Virtual Entry Matching Success
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - Verify:
+      - DR transaction increases cash wallet balance by transaction amount
+      - "Cash Withdrawn From Bank" transaction is created in database
+      - CR transaction decreases cash wallet balance by transaction amount (clamped to zero)
+      - "Cash Deposited To Bank" transaction is created in database
+      - Virtual entry is matched and appears in matchedEntries list
+    - _Requirements: 2.1, 2.2, 2.3, 2.4_
+
+  - [x] 3.5 Verify preservation tests still pass
+    - **Property 2: Preservation** - Non-Cash Transaction and Service Initialization Behavior
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Verify:
+      - Non-Cash transactions are saved to bank account correctly
+      - Bank account balance computation is unchanged
+      - Continuity checks, overlap warnings, and reconciliation checks run
+      - DashboardController and TagsController are refreshed
+      - Navigation flow completes successfully
+      - Graceful degradation when services are not initialized
+    - Confirm all tests still pass after fix (no regressions)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Run all unit tests for CashTagService, VirtualEntriesController, and ReviewTransactionsController
+  - Run all property-based tests for preservation checking
+  - Run all integration tests for full import flow
+  - Verify no regressions in existing functionality
+  - Verify cash wallet dual-effect logic works correctly for DR and CR transactions
+  - Verify virtual entry matching logic finds all valid matches
+  - Verify graceful degradation when services are not initialized
+  - If any tests fail, investigate root cause and fix before proceeding
+  - Ask the user if questions arise or if additional testing is needed
