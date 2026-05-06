@@ -1,4 +1,5 @@
 import '../../../core/service/local_db_service/local_db_service.dart';
+import '../../../core/service/local_storage_service.dart';
 import '../models/bank_account_model.dart';
 
 class BankAccountRepository {
@@ -27,12 +28,16 @@ class BankAccountRepository {
     BankAccountModel model,
     String oldEncryptedAccountNumber,
   ) async {
-    return await db.updateBankAccount(model, oldEncryptedAccountNumber);
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return 0;
+    return await db.updateBankAccount(model, oldEncryptedAccountNumber, accountId);
   }
 
   // delete bank account -------- //
   Future<int> deleteBankAccount(String bankAccountNumber) async {
-    return await db.deleteBankAccount(bankAccountNumber);
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return 0;
+    return await db.deleteBankAccount(bankAccountNumber, accountId);
   }
 
   // update bank balance ------- //
@@ -40,6 +45,12 @@ class BankAccountRepository {
     String bankAccountNumber,
     double newBalance,
   ) async {
-    await db.updateBankAccountBalance(bankAccountNumber, newBalance);
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return;
+    await db.updateBankAccountBalance(
+      bankAccountNumber,
+      newBalance,
+      accountId: accountId,
+    );
   }
 }

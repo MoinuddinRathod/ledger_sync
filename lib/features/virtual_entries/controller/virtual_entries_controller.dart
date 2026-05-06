@@ -227,7 +227,7 @@ class VirtualEntriesController extends GetxController {
       );
 
       // Get all tags for keyword matching
-      final tags = await _db.getAllTags();
+      final tags = await _db.getAllTags(accountId);
       if (tags.isEmpty) {
         log(
           '[VirtualEntriesController] runAutoMatching: No tags found, skipping',
@@ -390,10 +390,12 @@ class VirtualEntriesController extends GetxController {
     String? toDate,
   }) async {
     try {
+      final accountId = LocalStorageService.instance.accountId;
+      if (accountId <= 0) return [];
       final db = await _db.database;
 
       String dateFilter = '';
-      List<dynamic> args = [bankAccountNumber];
+      List<dynamic> args = [bankAccountNumber, accountId];
 
       if (fromDate != null && toDate != null) {
         dateFilter = 'AND t.$TXN_DATE >= ? AND t.$TXN_DATE <= ?';
@@ -418,6 +420,12 @@ class VirtualEntriesController extends GetxController {
         LEFT JOIN $TABLE_BANK_ACCOUNTS ba
           ON t.$TXN_ACCOUNT_ID = ba.$BANK_ACCOUNT_NUMBER
         WHERE t.$TXN_ACCOUNT_ID = ?
+          AND t.$TXN_ACCOUNT_ID IN (
+            SELECT $BANK_ACCOUNT_NUMBER
+            FROM $TABLE_BANK_ACCOUNTS
+            WHERE $ACCOUNT_ID = ?
+              AND $DELETED_AT IS NULL
+          )
           AND t.$DELETED_AT IS NULL
           $dateFilter
         ORDER BY t.$TXN_DATE DESC
@@ -438,6 +446,7 @@ class VirtualEntriesController extends GetxController {
       final result = await _db.markVirtualEntryResolved(
         match.virtualEntryId,
         match.txnId,
+        LocalStorageService.instance.accountId,
       );
 
       if (result > 0) {
@@ -496,7 +505,7 @@ class VirtualEntriesController extends GetxController {
       );
 
       // Get all tags for keyword matching
-      final tags = await _db.getAllTags();
+      final tags = await _db.getAllTags(accountId);
       if (tags.isEmpty) {
         log(
           '[VirtualEntriesController] runCashWalletMatching: No tags found, skipping',
@@ -630,7 +639,7 @@ class VirtualEntriesController extends GetxController {
       }
 
       // Get all tags for keyword matching
-      final tags = await _db.getAllTags();
+      final tags = await _db.getAllTags(accountId);
       if (tags.isEmpty) {
         log(
           '[VirtualEntriesController] runFullMatching: No tags found, skipping',
@@ -775,10 +784,12 @@ class VirtualEntriesController extends GetxController {
               .toUpperCase()
               .trim();
           final veEntryType = veMap[VE_ENTRY_TYPE] as String? ?? '';
-          if (veEntryType == 'Payable' && !drCashTypes.contains(cwType))
+          if (veEntryType == 'Payable' && !drCashTypes.contains(cwType)) {
             continue;
-          if (veEntryType == 'Receivable' && !crCashTypes.contains(cwType))
+          }
+          if (veEntryType == 'Receivable' && !crCashTypes.contains(cwType)) {
             continue;
+          }
 
           // Date range filter (cash wallet loop)
           final txnDateStr = cashTxn[DATE_ADDED] as String? ?? '';

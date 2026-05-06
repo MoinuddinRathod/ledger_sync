@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ledger_sync/core/service/local_db_service/local_db_service.dart';
 import 'package:ledger_sync/core/utils/app_constants.dart';
@@ -7,20 +9,21 @@ import 'package:ledger_sync/features/master_account/models/account_model.dart';
 import 'package:ledger_sync/features/tags/models/tag_model.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-/// **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7**
+/// **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 3.6**
 ///
-/// Preservation Property Tests - Non-Cash Transaction and Service Initialization Behavior
+/// **Property 2: Preservation** - Existing User Data Isolation and Login Flow
 ///
 /// **IMPORTANT**: These tests follow observation-first methodology
-/// **GOAL**: Verify that non-Cash transactions and service initialization handling remain unchanged
+/// **GOAL**: Observe behavior on UNFIXED code for non-buggy inputs and write property-based tests
 ///
 /// These tests verify preservation requirements by testing the baseline behavior on UNFIXED code:
-/// 1. Non-Cash transactions are saved to bank account correctly
-/// 2. Bank account balance is recomputed correctly via recomputeAndSave()
-/// 3. Continuity checks, overlap warnings, and reconciliation checks run
-/// 4. DashboardController and TagsController are refreshed
-/// 5. Navigation flow completes successfully
-/// 6. Graceful degradation when services are not initialized
+/// 1. Existing User Login: Verify login flow is unchanged
+/// 2. User Data Isolation: Verify User A cannot see User B's Cash Tag or Cash Wallet
+/// 3. Idempotent Tag Creation: Verify calling ensureCashTagExists() multiple times returns the same tagId
+/// 4. Cash Wallet Transaction Creation: Verify manual transaction creation continues to work
+/// 5. Non-Cash transactions are saved to bank account correctly
+/// 6. Bank account balance is recomputed correctly via recomputeAndSave()
+/// 7. Graceful degradation when services are not initialized
 ///
 /// Expected Outcome: Tests PASS on unfixed code (confirms baseline behavior to preserve)
 void main() {
@@ -580,4 +583,588 @@ void main() {
       },
     );
   });
+
+  group('Preservation Property Tests - User Login Flow', () {
+    late DatabaseHelper dbHelper;
+    final random = Random(789);
+
+    setUp(() async {
+      dbHelper = DatabaseHelper.instance;
+    });
+
+    test('Property 8: Existing user login flow remains unchanged', () async {
+      // Property-based approach: Test login with multiple accounts
+      const numTestCases = 5;
+
+      for (int i = 0; i < numTestCases; i++) {
+        // Arrange: Create a test account
+        final accountName = 'LoginUser${random.nextInt(10000)}';
+        final pin = '${1000 + random.nextInt(9000)}';
+
+        // Hash the PIN (simulating what MasterAccountController does)
+        final hashedPin = _hashPin(pin);
+
+        final accountId = await dbHelper.insertAccount(
+          AccountModel(
+            accountName: accountName,
+            pin: hashedPin,
+            createdAt: DateTime.now().toIso8601String(),
+            isDefault: 1,
+          ),
+        );
+
+        expect(
+          accountId,
+          greaterThan(0),
+          reason: 'Account should be created successfully',
+        );
+
+        // Act: Simulate login by checking credentials
+        final loginResult = await dbHelper.checkLogin(accountName, hashedPin);
+
+        // Assert: Login should succeed and return the correct accountId
+        expect(
+          loginResult,
+          equals(accountId),
+          reason:
+              'Login should succeed and return correct accountId for user "$accountName"',
+        );
+
+        // Verify login with wrong PIN fails
+        final wrongHashedPin = _hashPin('9999');
+        final failedLogin = await dbHelper.checkLogin(
+          accountName,
+          wrongHashedPin,
+        );
+
+        expect(
+          failedLogin,
+          equals(-1),
+          reason: 'Login should fail with incorrect PIN',
+        );
+      }
+    });
+
+    test('Property 9: Multiple users can login independently', () async {
+      // Arrange: Create multiple accounts
+      final accounts = <Map<String, dynamic>>[];
+      const numAccounts = 3;
+
+      for (int i = 0; i < numAccounts; i++) {
+        final accountName = 'MultiUser${random.nextInt(10000)}';
+        final pin = '${1000 + random.nextInt(9000)}';
+        final hashedPin = _hashPin(pin);
+
+        final accountId = await dbHelper.insertAccount(
+          AccountModel(
+            accountName: accountName,
+            pin: hashedPin,
+            createdAt: DateTime.now().toIso8601String(),
+            isDefault: i == 0 ? 1 : 0,
+          ),
+        );
+
+        accounts.add({
+          'accountId': accountId,
+          'accountName': accountName,
+          'hashedPin': hashedPin,
+        });
+      }
+
+      // Act & Assert: Each user should be able to login independently
+      for (final account in accounts) {
+        final loginResult = await dbHelper.checkLogin(
+          account['accountName'] as String,
+          account['hashedPin'] as String,
+        );
+
+        expect(
+          loginResult,
+          equals(account['accountId']),
+          reason:
+              'Each user should be able to login independently with their own credentials',
+        );
+      }
+    });
+  });
+
+  group('Preservation Property Tests - User Data Isolation', () {
+    late DatabaseHelper dbHelper;
+    late int userAId;
+    late int userBId;
+    final random = Random(101112);
+
+    setUp(() async {
+      dbHelper = DatabaseHelper.instance;
+
+      // Create User A
+      userAId = await dbHelper.insertAccount(
+        AccountModel(
+          accountName: 'UserA_${random.nextInt(10000)}',
+          pin: _hashPin('1111'),
+          createdAt: DateTime.now().toIso8601String(),
+          isDefault: 1,
+        ),
+      );
+
+      // Create User B
+      userBId = await dbHelper.insertAccount(
+        AccountModel(
+          accountName: 'UserB_${random.nextInt(10000)}',
+          pin: _hashPin('2222'),
+          createdAt: DateTime.now().toIso8601String(),
+          isDefault: 0,
+        ),
+      );
+
+      // Create Cash Wallets for both users
+      await dbHelper.insertCashWallet({
+        'account_id': userAId,
+        'current_balance': 1000.0,
+        'date_added': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      await dbHelper.insertCashWallet({
+        'account_id': userBId,
+        'current_balance': 2000.0,
+        'date_added': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Create Cash Tags for both users
+      await dbHelper.ensureCashTagExists(userAId);
+      await dbHelper.ensureCashTagExists(userBId);
+    });
+
+    test('Property 10: User A cannot see User B\'s Cash Wallet', () async {
+      // Act: Query Cash Wallet for User A
+      final userACashWallet = await dbHelper.getCashWallet(userAId);
+
+      // Assert: User A should only see their own Cash Wallet
+      expect(
+        userACashWallet,
+        isNotNull,
+        reason: 'User A should have a Cash Wallet',
+      );
+      expect(
+        userACashWallet![ACCOUNT_ID],
+        equals(userAId),
+        reason: 'Cash Wallet should belong to User A',
+      );
+      expect(
+        userACashWallet[CASH_WALLET_CURRENT_BALANCE],
+        equals(1000.0),
+        reason: 'User A should see their own balance',
+      );
+
+      // Act: Query Cash Wallet for User B
+      final userBCashWallet = await dbHelper.getCashWallet(userBId);
+
+      // Assert: User B should only see their own Cash Wallet
+      expect(
+        userBCashWallet,
+        isNotNull,
+        reason: 'User B should have a Cash Wallet',
+      );
+      expect(
+        userBCashWallet![ACCOUNT_ID],
+        equals(userBId),
+        reason: 'Cash Wallet should belong to User B',
+      );
+      expect(
+        userBCashWallet[CASH_WALLET_CURRENT_BALANCE],
+        equals(2000.0),
+        reason: 'User B should see their own balance',
+      );
+
+      // Verify isolation: User A's balance != User B's balance
+      expect(
+        userACashWallet[CASH_WALLET_CURRENT_BALANCE],
+        isNot(equals(userBCashWallet[CASH_WALLET_CURRENT_BALANCE])),
+        reason: 'User A and User B should have different balances',
+      );
+    });
+
+    test('Property 11: User A cannot see User B\'s Cash Tag', () async {
+      // Act: Query Cash Tag for User A
+      final db = await dbHelper.database;
+      final userACashTag = await db.query(
+        TABLE_TAGS,
+        where:
+            '$TAG_NAME = ? AND $TAG_USER_ID = ? AND $TAG_BANK_ACCOUNT_ID IS NULL AND $TAG_DELETED_AT IS NULL',
+        whereArgs: ['Cash', userAId],
+      );
+
+      // Assert: User A should only see their own Cash Tag
+      expect(
+        userACashTag.length,
+        equals(1),
+        reason: 'User A should have exactly one Cash Tag',
+      );
+      expect(
+        userACashTag.first[TAG_USER_ID],
+        equals(userAId),
+        reason: 'Cash Tag should belong to User A',
+      );
+
+      // Act: Query Cash Tag for User B
+      final userBCashTag = await db.query(
+        TABLE_TAGS,
+        where:
+            '$TAG_NAME = ? AND $TAG_USER_ID = ? AND $TAG_BANK_ACCOUNT_ID IS NULL AND $TAG_DELETED_AT IS NULL',
+        whereArgs: ['Cash', userBId],
+      );
+
+      // Assert: User B should only see their own Cash Tag
+      expect(
+        userBCashTag.length,
+        equals(1),
+        reason: 'User B should have exactly one Cash Tag',
+      );
+      expect(
+        userBCashTag.first[TAG_USER_ID],
+        equals(userBId),
+        reason: 'Cash Tag should belong to User B',
+      );
+
+      // Verify isolation: User A's tag ID != User B's tag ID
+      expect(
+        userACashTag.first[TAG_ID],
+        isNot(equals(userBCashTag.first[TAG_ID])),
+        reason: 'User A and User B should have different Cash Tag IDs',
+      );
+    });
+
+    test(
+      'Property 12: User data queries filter by accountId correctly',
+      () async {
+        // Property-based approach: Test multiple queries with different users
+        final queries = [
+          {
+            'description': 'Cash Wallet query',
+            'query': () => dbHelper.getCashWallet(userAId),
+            'expectedAccountId': userAId,
+          },
+          {
+            'description': 'Cash Wallet query',
+            'query': () => dbHelper.getCashWallet(userBId),
+            'expectedAccountId': userBId,
+          },
+        ];
+
+        for (final testCase in queries) {
+          // Act: Execute query
+          final result = await (testCase['query'] as Function)();
+
+          // Assert: Result should be filtered by accountId
+          expect(
+            result,
+            isNotNull,
+            reason: '${testCase['description']} should return data',
+          );
+          expect(
+            result![ACCOUNT_ID],
+            equals(testCase['expectedAccountId']),
+            reason:
+                '${testCase['description']} should filter by accountId correctly',
+          );
+        }
+      },
+    );
+  });
+
+  group('Preservation Property Tests - Idempotent Tag Creation', () {
+    late DatabaseHelper dbHelper;
+    late int testAccountId;
+    final random = Random(131415);
+
+    setUp(() async {
+      dbHelper = DatabaseHelper.instance;
+
+      // Create a test account
+      testAccountId = await dbHelper.insertAccount(
+        AccountModel(
+          accountName: 'IdempotentUser_${random.nextInt(10000)}',
+          pin: _hashPin('3333'),
+          createdAt: DateTime.now().toIso8601String(),
+          isDefault: 1,
+        ),
+      );
+    });
+
+    test('Property 13: ensureCashTagExists() is idempotent', () async {
+      // Property-based approach: Call ensureCashTagExists() multiple times
+      const numCalls = 10;
+      final tagIds = <int>[];
+
+      for (int i = 0; i < numCalls; i++) {
+        // Act: Call ensureCashTagExists()
+        final tagId = await dbHelper.ensureCashTagExists(testAccountId);
+
+        tagIds.add(tagId);
+
+        // Assert: Tag ID should be valid
+        expect(
+          tagId,
+          greaterThan(0),
+          reason: 'ensureCashTagExists() should return valid tag ID',
+        );
+      }
+
+      // Assert: All calls should return the same tag ID (idempotent)
+      final firstTagId = tagIds.first;
+      for (int i = 1; i < tagIds.length; i++) {
+        expect(
+          tagIds[i],
+          equals(firstTagId),
+          reason:
+              'ensureCashTagExists() should be idempotent (call ${i + 1} returned ${tagIds[i]}, expected $firstTagId)',
+        );
+      }
+
+      // Verify only one Cash Tag exists in database
+      final db = await dbHelper.database;
+      final cashTags = await db.query(
+        TABLE_TAGS,
+        where:
+            '$TAG_NAME = ? AND $TAG_USER_ID = ? AND $TAG_BANK_ACCOUNT_ID IS NULL AND $TAG_DELETED_AT IS NULL',
+        whereArgs: ['Cash', testAccountId],
+      );
+
+      expect(
+        cashTags.length,
+        equals(1),
+        reason:
+            'Only one Cash Tag should exist after multiple ensureCashTagExists() calls',
+      );
+    });
+
+    test(
+      'Property 14: ensureCashTagExists() creates tag with correct structure',
+      () async {
+        // Act: Call ensureCashTagExists()
+        final tagId = await dbHelper.ensureCashTagExists(testAccountId);
+
+        // Assert: Tag should be created with correct structure
+        final db = await dbHelper.database;
+        final cashTag = await db.query(
+          TABLE_TAGS,
+          where: '$TAG_ID = ?',
+          whereArgs: [tagId],
+        );
+
+        expect(cashTag.length, equals(1), reason: 'Cash Tag should exist');
+
+        final tag = cashTag.first;
+        expect(
+          tag[TAG_NAME],
+          equals('Cash'),
+          reason: 'Cash Tag should have name "Cash"',
+        );
+        expect(
+          tag[TAG_USER_ID],
+          equals(testAccountId),
+          reason: 'Cash Tag should be scoped to user accountId',
+        );
+        expect(
+          tag[TAG_PRIORITY],
+          equals(0),
+          reason: 'Cash Tag should have highest priority (0)',
+        );
+        expect(
+          tag[TAG_BANK_ACCOUNT_ID],
+          isNull,
+          reason: 'Cash Tag should be user-scoped (not bank-account-scoped)',
+        );
+        expect(
+          tag[TAG_DELETED_AT],
+          isNull,
+          reason: 'Cash Tag should not be deleted',
+        );
+      },
+    );
+  });
+
+  group(
+    'Preservation Property Tests - Manual Cash Wallet Transaction Creation',
+    () {
+      late DatabaseHelper dbHelper;
+      late int testAccountId;
+      late int cashTagId;
+      final random = Random(161718);
+
+      setUp(() async {
+        dbHelper = DatabaseHelper.instance;
+
+        // Create a test account
+        testAccountId = await dbHelper.insertAccount(
+          AccountModel(
+            accountName: 'ManualTxnUser_${random.nextInt(10000)}',
+            pin: _hashPin('4444'),
+            createdAt: DateTime.now().toIso8601String(),
+            isDefault: 1,
+          ),
+        );
+
+        // Create Cash Wallet
+        await dbHelper.insertCashWallet({
+          'account_id': testAccountId,
+          'current_balance': 5000.0,
+          'date_added': DateTime.now().toIso8601String(),
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        // Create Cash Tag
+        cashTagId = await dbHelper.ensureCashTagExists(testAccountId);
+      });
+
+      test(
+        'Property 15: Manual cash wallet transaction creation continues to work',
+        () async {
+          // Property-based approach: Create multiple manual transactions
+          const numTransactions = 10;
+          final transactionIds = <int>[];
+
+          for (int i = 0; i < numTransactions; i++) {
+            // Arrange: Generate random transaction data
+            final amount = (random.nextDouble() * 1000).roundToDouble();
+            final type = random.nextBool() ? 'DR' : 'CR';
+            final now = DateTime.now().toIso8601String();
+
+            // Act: Insert manual cash wallet transaction
+            final txnId = await dbHelper.insertCashWalletTransaction({
+              CASH_WALLET_TRANSACTION_ACCOUNT_ID: testAccountId,
+              CASH_WALLET_TRANSACTION_TAG_ID: cashTagId,
+              CASH_WALLET_TRANSACTION_AMOUNT: amount,
+              CASH_WALLET_TRANSACTION_TYPE: type,
+              TRANSACTION_NOTE: 'Manual transaction $i',
+              DATE_ADDED: now,
+              CASH_WALLET_IS_MANUAL: 1,
+              CREATED_AT: now,
+              UPDATED_AT: now,
+              DELETED_AT: null,
+            });
+
+            transactionIds.add(txnId);
+
+            // Assert: Transaction should be created successfully
+            expect(
+              txnId,
+              greaterThan(0),
+              reason: 'Manual transaction $i should be created successfully',
+            );
+          }
+
+          // Verify all transactions exist in database
+          final cashWalletTransactions = await dbHelper
+              .getCashWalletTransactions(testAccountId);
+
+          expect(
+            cashWalletTransactions.length,
+            greaterThanOrEqualTo(numTransactions),
+            reason: 'All manual transactions should exist in database',
+          );
+
+          // Verify transactions are marked as manual
+          for (final txn in cashWalletTransactions) {
+            expect(
+              txn[CASH_WALLET_IS_MANUAL],
+              equals(1),
+              reason: 'Transaction should be marked as manual',
+            );
+            expect(
+              txn[CASH_WALLET_TRANSACTION_ACCOUNT_ID],
+              equals(testAccountId),
+              reason: 'Transaction should belong to correct account',
+            );
+          }
+        },
+      );
+
+      test(
+        'Property 16: Manual transactions update cash wallet balance correctly',
+        () async {
+          // Arrange: Get initial balance
+          final initialCashWallet = await dbHelper.getCashWallet(testAccountId);
+          final initialBalance =
+              initialCashWallet![CASH_WALLET_CURRENT_BALANCE] as double;
+
+          // Act: Create a CR transaction (cash deposit)
+          final crAmount = 1000.0;
+          await dbHelper.insertCashWalletTransaction({
+            CASH_WALLET_TRANSACTION_ACCOUNT_ID: testAccountId,
+            CASH_WALLET_TRANSACTION_TAG_ID: cashTagId,
+            CASH_WALLET_TRANSACTION_AMOUNT: crAmount,
+            CASH_WALLET_TRANSACTION_TYPE: 'CR',
+            TRANSACTION_NOTE: 'Manual deposit',
+            DATE_ADDED: DateTime.now().toIso8601String(),
+            CASH_WALLET_IS_MANUAL: 1,
+            CREATED_AT: DateTime.now().toIso8601String(),
+            UPDATED_AT: DateTime.now().toIso8601String(),
+            DELETED_AT: null,
+          });
+
+          // Update balance manually (simulating what the controller does)
+          final newBalance = initialBalance + crAmount;
+          await dbHelper.updateCashWalletBalance(testAccountId, newBalance);
+
+          // Assert: Balance should be updated correctly
+          final updatedCashWallet = await dbHelper.getCashWallet(testAccountId);
+          final updatedBalance =
+              updatedCashWallet![CASH_WALLET_CURRENT_BALANCE] as double;
+
+          expect(
+            updatedBalance,
+            equals(initialBalance + crAmount),
+            reason:
+                'Cash wallet balance should be updated after CR transaction',
+          );
+
+          // Act: Create a DR transaction (cash withdrawal)
+          final drAmount = 500.0;
+          await dbHelper.insertCashWalletTransaction({
+            CASH_WALLET_TRANSACTION_ACCOUNT_ID: testAccountId,
+            CASH_WALLET_TRANSACTION_TAG_ID: cashTagId,
+            CASH_WALLET_TRANSACTION_AMOUNT: drAmount,
+            CASH_WALLET_TRANSACTION_TYPE: 'DR',
+            TRANSACTION_NOTE: 'Manual withdrawal',
+            DATE_ADDED: DateTime.now().toIso8601String(),
+            CASH_WALLET_IS_MANUAL: 1,
+            CREATED_AT: DateTime.now().toIso8601String(),
+            UPDATED_AT: DateTime.now().toIso8601String(),
+            DELETED_AT: null,
+          });
+
+          // Update balance manually
+          final finalBalance = updatedBalance - drAmount;
+          await dbHelper.updateCashWalletBalance(testAccountId, finalBalance);
+
+          // Assert: Balance should be updated correctly
+          final finalCashWallet = await dbHelper.getCashWallet(testAccountId);
+          final finalBalanceResult =
+              finalCashWallet![CASH_WALLET_CURRENT_BALANCE] as double;
+
+          expect(
+            finalBalanceResult,
+            equals(initialBalance + crAmount - drAmount),
+            reason:
+                'Cash wallet balance should be updated after DR transaction',
+          );
+          expect(
+            finalBalanceResult,
+            equals(5000.0 + 1000.0 - 500.0),
+            reason: 'Final balance should be ₹5500',
+          );
+        },
+      );
+    },
+  );
+}
+
+/// Helper function to hash PIN (simulating PasswordEncryptionDecryptionService)
+/// Uses SHA-256 hashing to match production behavior
+String _hashPin(String pin) {
+  final bytes = utf8.encode(pin.trim());
+  return sha256.convert(bytes).toString();
 }

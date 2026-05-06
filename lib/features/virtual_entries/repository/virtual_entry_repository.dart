@@ -63,6 +63,7 @@ class VirtualEntryRepository {
       final result = await _dbService.updateVirtualEntry(
         data,
         entry.virtualEntryId!,
+        _masterAccountId,
       );
       return result > 0;
     } catch (e) {
@@ -77,7 +78,10 @@ class VirtualEntryRepository {
 
   Future<bool> softDeleteVirtualEntry(int virtualEntryId) async {
     try {
-      final result = await _dbService.softDeleteVirtualEntry(virtualEntryId);
+      final result = await _dbService.softDeleteVirtualEntry(
+        virtualEntryId,
+        _masterAccountId,
+      );
       return result > 0;
     } catch (e) {
       log('Error deleting virtual entry: $e');

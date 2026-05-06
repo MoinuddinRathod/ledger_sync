@@ -177,6 +177,7 @@ class DatabaseHelper {
   // ============================================================
   // ALL QUERY METHODS
   // ============================================================
+  bool _isValidAccountId(int accountId) => accountId > 0;
 
   // ------- insert account -------- //
   Future<int> insertAccount(AccountModel account) async {
@@ -242,41 +243,52 @@ class DatabaseHelper {
   Future<int> updateBankAccount(
     BankAccountModel model,
     String oldEncryptedAccountNumber,
+    int accountId,
   ) async {
+    if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
       TABLE_BANK_ACCOUNTS,
       model.toMap(),
-      where: "$BANK_ACCOUNT_NUMBER = ?",
-      whereArgs: [oldEncryptedAccountNumber],
+      where: "$BANK_ACCOUNT_NUMBER = ? AND $ACCOUNT_ID = ?",
+      whereArgs: [oldEncryptedAccountNumber, accountId],
     );
   }
 
   Future<void> updateBankAccountBalance(
     String bankAccountNumber,
     double newBalance, {
+    int? accountId,
     DatabaseExecutor? executor,
   }) async {
     final db = executor ?? await instance.database;
+    if (accountId != null && !_isValidAccountId(accountId)) return;
+    final whereClause = accountId == null
+        ? '$BANK_ACCOUNT_NUMBER = ?'
+        : '$BANK_ACCOUNT_NUMBER = ? AND $ACCOUNT_ID = ?';
+    final whereArgs = accountId == null
+        ? [bankAccountNumber]
+        : [bankAccountNumber, accountId];
     await db.update(
       TABLE_BANK_ACCOUNTS,
       {
         CURRENT_BALANCE: newBalance,
         UPDATED_AT: DateTime.now().toIso8601String(),
       },
-      where: '$BANK_ACCOUNT_NUMBER = ?',
-      whereArgs: [bankAccountNumber],
+      where: whereClause,
+      whereArgs: whereArgs,
     );
   }
 
   // -------- delete bank account ------------- //
-  Future<int> deleteBankAccount(String encryptedAccountNumber) async {
+  Future<int> deleteBankAccount(String encryptedAccountNumber, int accountId) async {
+    if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
       TABLE_BANK_ACCOUNTS,
       {DELETED_AT: DateTime.now().toIso8601String()},
-      where: "$BANK_ACCOUNT_NUMBER = ?",
-      whereArgs: [encryptedAccountNumber],
+      where: "$BANK_ACCOUNT_NUMBER = ? AND $ACCOUNT_ID = ?",
+      whereArgs: [encryptedAccountNumber, accountId],
     );
   }
 
@@ -357,24 +369,27 @@ class DatabaseHelper {
   Future<int> updateCashWalletTransaction(
     Map<String, dynamic> data,
     int transactionId,
+    int accountId,
   ) async {
+    if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
       TABLE_CASH_WALLET_TRANSACTIONS,
       data,
-      where: "$CASH_WALLET_TRANSACTION_ID = ?",
-      whereArgs: [transactionId],
+      where: "$CASH_WALLET_TRANSACTION_ID = ? AND $ACCOUNT_ID = ?",
+      whereArgs: [transactionId, accountId],
     );
   }
 
   // -------- delete cash wallet transaction ------------- //
-  Future<int> deleteCashWalletTransaction(int transactionId) async {
+  Future<int> deleteCashWalletTransaction(int transactionId, int accountId) async {
+    if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
       TABLE_CASH_WALLET_TRANSACTIONS,
       {DELETED_AT: DateTime.now().toIso8601String()},
-      where: "$CASH_WALLET_TRANSACTION_ID = ?",
-      whereArgs: [transactionId],
+      where: "$CASH_WALLET_TRANSACTION_ID = ? AND $ACCOUNT_ID = ?",
+      whereArgs: [transactionId, accountId],
     );
   }
 
@@ -403,23 +418,26 @@ class DatabaseHelper {
   Future<int> updateVirtualEntry(
     Map<String, dynamic> data,
     int virtualEntryId,
+    int accountId,
   ) async {
+    if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
       TABLE_VIRTUAL_ENTRIES,
       data,
-      where: "$VIRTUAL_ENTRY_ID = ?",
-      whereArgs: [virtualEntryId],
+      where: "$VIRTUAL_ENTRY_ID = ? AND $VE_ACCOUNT_ID = ?",
+      whereArgs: [virtualEntryId, accountId],
     );
   }
 
-  Future<int> softDeleteVirtualEntry(int virtualEntryId) async {
+  Future<int> softDeleteVirtualEntry(int virtualEntryId, int accountId) async {
+    if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
       TABLE_VIRTUAL_ENTRIES,
       {VE_DELETED_AT: DateTime.now().toIso8601String()},
-      where: "$VIRTUAL_ENTRY_ID = ?",
-      whereArgs: [virtualEntryId],
+      where: "$VIRTUAL_ENTRY_ID = ? AND $VE_ACCOUNT_ID = ?",
+      whereArgs: [virtualEntryId, accountId],
     );
   }
 
@@ -439,8 +457,9 @@ class DatabaseHelper {
   }
 
   // -------- get all tags (global — no account/bank filter) ------------- //
-  Future<List<TagModel>> getAllTags() async {
+  Future<List<TagModel>> getAllTags(int userId) async {
     try {
+      if (!_isValidAccountId(userId)) return [];
       final db = await instance.database;
       final result = await db.rawQuery('''
         SELECT
@@ -449,10 +468,10 @@ class DatabaseHelper {
           COALESCE(SUM(CASE WHEN UPPER(t.$TXN_TYPE) = 'CR' THEN t.$TXN_AMOUNT ELSE 0 END), 0.0) as totalCr
         FROM $TABLE_TAGS tg
         LEFT JOIN $TABLE_TRANSACTIONS t ON tg.$TAG_ID = t.$TXN_TAG_ID AND t.$DELETED_AT IS NULL
-        WHERE tg.$TAG_DELETED_AT IS NULL
+        WHERE tg.$TAG_USER_ID = ? AND tg.$TAG_DELETED_AT IS NULL
         GROUP BY tg.$TAG_ID
         ORDER BY tg.$TAG_PRIORITY ASC
-      ''');
+      ''', [userId]);
       return result.map((e) => TagModel.fromMap(e)).toList();
     } catch (e) {
       log(e.toString());
@@ -463,6 +482,7 @@ class DatabaseHelper {
   // -------- get tags by user id (account-level) ------------- //
   Future<List<TagModel>> getTagsByUserId(int userId) async {
     try {
+      if (!_isValidAccountId(userId)) return [];
       final db = await instance.database;
       final result = await db.rawQuery(
         '''
@@ -486,8 +506,12 @@ class DatabaseHelper {
   }
 
   // -------- get tags by bank account id (account-level) ------------- //
-  Future<List<TagModel>> getTagsByBankAccountId(String bankAccountId) async {
+  Future<List<TagModel>> getTagsByBankAccountId(
+    String bankAccountId,
+    int userId,
+  ) async {
     try {
+      if (!_isValidAccountId(userId)) return [];
       final db = await instance.database;
       final result = await db.rawQuery(
         '''
@@ -497,11 +521,13 @@ class DatabaseHelper {
           COALESCE(SUM(CASE WHEN UPPER(t.$TXN_TYPE) = 'CR' THEN t.$TXN_AMOUNT ELSE 0 END), 0.0) as totalCr
         FROM $TABLE_TAGS tg
         LEFT JOIN $TABLE_TRANSACTIONS t ON tg.$TAG_ID = t.$TXN_TAG_ID AND t.$DELETED_AT IS NULL
-        WHERE tg.$TAG_BANK_ACCOUNT_ID = ? AND tg.$TAG_DELETED_AT IS NULL
+        WHERE tg.$TAG_BANK_ACCOUNT_ID = ?
+          AND tg.$TAG_USER_ID = ?
+          AND tg.$TAG_DELETED_AT IS NULL
         GROUP BY tg.$TAG_ID
         ORDER BY tg.$TAG_PRIORITY ASC
       ''',
-        [bankAccountId],
+        [bankAccountId, userId],
       );
       return result.map((e) => TagModel.fromMap(e)).toList();
     } catch (e) {
@@ -511,14 +537,15 @@ class DatabaseHelper {
   }
 
   // -------- update tag ------------- //
-  Future<int> updateTag(TagModel model) async {
+  Future<int> updateTag(TagModel model, int userId) async {
     try {
+      if (!_isValidAccountId(userId)) return 0;
       final db = await instance.database;
       return await db.update(
         TABLE_TAGS,
         model.toMap(),
-        where: "$TAG_ID = ?",
-        whereArgs: [model.tagId],
+        where: "$TAG_ID = ? AND $TAG_USER_ID = ?",
+        whereArgs: [model.tagId, userId],
       );
     } catch (e) {
       log(e.toString());
@@ -527,14 +554,15 @@ class DatabaseHelper {
   }
 
   // -------- soft delete tag ------------- //
-  Future<int> deleteTag(int tagId) async {
+  Future<int> deleteTag(int tagId, int userId) async {
     try {
+      if (!_isValidAccountId(userId)) return 0;
       final db = await instance.database;
       return await db.update(
         TABLE_TAGS,
         {TAG_DELETED_AT: DateTime.now().toIso8601String()},
-        where: "$TAG_ID = ?",
-        whereArgs: [tagId],
+        where: "$TAG_ID = ? AND $TAG_USER_ID = ?",
+        whereArgs: [tagId, userId],
       );
     } catch (e) {
       log(e.toString());
@@ -551,9 +579,12 @@ class DatabaseHelper {
   /// (for display info). Ordered newest-first.
   Future<List<Map<String, dynamic>>> getTransactionsByAccount(
     String encryptedAccountNumber,
+    int masterAccountId,
   ) async {
     try {
-      if (encryptedAccountNumber.isEmpty) return [];
+      if (encryptedAccountNumber.isEmpty || !_isValidAccountId(masterAccountId)) {
+        return [];
+      }
       final db = await instance.database;
       return await db.rawQuery(
         '''
@@ -577,10 +608,16 @@ class DatabaseHelper {
           ON t.$TXN_ACCOUNT_ID = ba.$BANK_ACCOUNT_NUMBER
           AND ba.$DELETED_AT IS NULL
         WHERE t.$TXN_ACCOUNT_ID = ?
+          AND t.$TXN_ACCOUNT_ID IN (
+            SELECT $BANK_ACCOUNT_NUMBER
+            FROM $TABLE_BANK_ACCOUNTS
+            WHERE $ACCOUNT_ID = ?
+              AND $DELETED_AT IS NULL
+          )
           AND t.$DELETED_AT IS NULL
         ORDER BY t.$TXN_DATE DESC, t.$TXN_ID DESC
         ''',
-        [encryptedAccountNumber],
+        [encryptedAccountNumber, masterAccountId],
       );
     } catch (e) {
       log('getTransactionsByAccount error: $e');
@@ -673,14 +710,16 @@ class DatabaseHelper {
   }
 
   /// Soft-delete a single transaction by setting its [DELETED_AT] timestamp.
-  Future<int> softDeleteTransaction(int txnId) async {
+  Future<int> softDeleteTransaction(int txnId, int masterAccountId) async {
     try {
+      if (!_isValidAccountId(masterAccountId)) return 0;
       final db = await instance.database;
       return await db.update(
         TABLE_TRANSACTIONS,
         {DELETED_AT: DateTime.now().toIso8601String()},
-        where: '$TXN_ID = ?',
-        whereArgs: [txnId],
+        where:
+            '$TXN_ID = ? AND $TXN_ACCOUNT_ID IN (SELECT $BANK_ACCOUNT_NUMBER FROM $TABLE_BANK_ACCOUNTS WHERE $ACCOUNT_ID = ? AND $DELETED_AT IS NULL)',
+        whereArgs: [txnId, masterAccountId],
       );
     } catch (e) {
       log('softDeleteTransaction error: $e');
@@ -932,16 +971,17 @@ class DatabaseHelper {
 
   /// Ensures the global 'Cash' tag exists. Returns the tag_id.
   /// Called once on app initialization.
-  Future<int> ensureCashTagExists() async {
+  Future<int> ensureCashTagExists(int userId) async {
     try {
+      if (!_isValidAccountId(userId)) return -1;
       final db = await instance.database;
 
-      // Check if Cash tag already exists (global scope)
+      // Check if Cash tag already exists for this user.
       final existing = await db.query(
         TABLE_TAGS,
         where:
-            '$TAG_NAME = ? AND $TAG_USER_ID IS NULL AND $TAG_BANK_ACCOUNT_ID IS NULL AND $TAG_DELETED_AT IS NULL',
-        whereArgs: ['Cash'],
+            '$TAG_NAME = ? AND $TAG_USER_ID = ? AND $TAG_BANK_ACCOUNT_ID IS NULL AND $TAG_DELETED_AT IS NULL',
+        whereArgs: ['Cash', userId],
         limit: 1,
       );
 
@@ -949,7 +989,7 @@ class DatabaseHelper {
         return existing.first[TAG_ID] as int;
       }
 
-      // Create Cash tag with comprehensive keywords
+      // Create user-scoped Cash tag.
       final keywords = jsonEncode([
         {"name": "atm/wdl", "priority": 1},
         {"name": "atm withdrawal", "priority": 2},
@@ -975,7 +1015,7 @@ class DatabaseHelper {
         TAG_NAME: 'Cash',
         TAG_KEYWORDS: keywords,
         TAG_PRIORITY: 0, // Highest priority - must match first
-        TAG_USER_ID: null,
+        TAG_USER_ID: userId,
         TAG_BANK_ACCOUNT_ID: null,
         TAG_CREATED_AT: now,
         TAG_UPDATED_AT: now,
@@ -1022,8 +1062,10 @@ class DatabaseHelper {
   Future<int> markVirtualEntryResolved(
     int virtualEntryId,
     int matchedTxnId,
+    int accountId,
   ) async {
     try {
+      if (!_isValidAccountId(accountId)) return 0;
       final db = await instance.database;
       return await db.update(
         TABLE_VIRTUAL_ENTRIES,
@@ -1032,8 +1074,8 @@ class DatabaseHelper {
           VE_MATCHED_TXN_ID: matchedTxnId,
           VE_UPDATED_AT: DateTime.now().toIso8601String(),
         },
-        where: '$VIRTUAL_ENTRY_ID = ?',
-        whereArgs: [virtualEntryId],
+        where: '$VIRTUAL_ENTRY_ID = ? AND $VE_ACCOUNT_ID = ?',
+        whereArgs: [virtualEntryId, accountId],
       );
     } catch (e) {
       log('markVirtualEntryResolved error: $e');

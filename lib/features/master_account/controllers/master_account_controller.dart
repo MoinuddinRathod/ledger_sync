@@ -9,6 +9,13 @@ import '../models/account_model.dart';
 import '../services/password_encryption_decryption_service.dart';
 import '../services/session_service.dart';
 import 'bear_controller.dart';
+import '../../bank_account/controllers/bank_account_controller.dart';
+import '../../cash_wallet/controller/cash_wallet_controller.dart';
+import '../../home/controllers/dashboard_controller.dart';
+import '../../tags/controllers/tags_controller.dart';
+import '../../transactions/controller/all_transaction_controller.dart';
+import '../../transactions/controller/transaction_controller.dart';
+import '../../virtual_entries/controller/virtual_entries_controller.dart';
 
 class MasterAccountController extends GetxController {
   // ── Controllers ──
@@ -112,6 +119,18 @@ class MasterAccountController extends GetxController {
             'date_added': DateTime.now().toIso8601String(),
             'created_at': DateTime.now().toIso8601String(),
           });
+
+          // Create Cash Tag for the new user
+          final cashTagId = await DatabaseHelper.instance.ensureCashTagExists(
+            result,
+          );
+          if (cashTagId <= 0) {
+            debugPrint(
+              "Warning: Failed to create Cash tag for account $result",
+            );
+          } else {
+            debugPrint("Cash tag created successfully with ID: $cashTagId");
+          }
         });
       } catch (e) {
         debugPrint("Error creating cash wallet: $e");
@@ -167,6 +186,7 @@ class MasterAccountController extends GetxController {
     if (accountId != -1) {
       // Bear celebrates → navigation fires only after animation ends
       bearCtr.fireSuccess(() async {
+        _clearUserScopedState();
         await _sessionService.saveSession(
           accountId: accountId,
           accountName: accountNameController.text.trim(),
@@ -195,12 +215,37 @@ class MasterAccountController extends GetxController {
   // Clears both SecureStorage token + LocalStorage
   // ─────────────────────────────────────────────
   Future<void> logout() async {
+    _clearUserScopedState();
     await _sessionService.logout();
     final local = LocalStorageService.instance;
     local.isLoggedIn = false;
     local.accountName = '';
     local.accountId = -1;
     Get.offAllNamed(AppRoutes.masterAccountSetupScreen);
+  }
+
+  void _clearUserScopedState() {
+    if (Get.isRegistered<BankAccountController>()) {
+      Get.delete<BankAccountController>(force: true);
+    }
+    if (Get.isRegistered<CashWalletController>()) {
+      Get.delete<CashWalletController>(force: true);
+    }
+    if (Get.isRegistered<TagsController>()) {
+      Get.delete<TagsController>(force: true);
+    }
+    if (Get.isRegistered<DashboardController>()) {
+      Get.delete<DashboardController>(force: true);
+    }
+    if (Get.isRegistered<AllTransactionsController>()) {
+      Get.delete<AllTransactionsController>(force: true);
+    }
+    if (Get.isRegistered<TransactionsController>()) {
+      Get.delete<TransactionsController>(force: true);
+    }
+    if (Get.isRegistered<VirtualEntriesController>()) {
+      Get.delete<VirtualEntriesController>(force: true);
+    }
   }
 
   // ─────────────────────────────────────────────

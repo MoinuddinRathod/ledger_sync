@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import '../../../core/service/local_db_service/local_db_service.dart';
+import '../../../core/service/local_storage_service.dart';
 import '../../../core/utils/app_constants.dart';
 import '../../home/controllers/review_transactions_controller.dart';
 import '../../home/parsers/parse_result.dart';
@@ -143,7 +144,9 @@ class TransactionRepository {
       log('softDelete: invalid txnId $txnId');
       return -1;
     }
-    return await _db.softDeleteTransaction(txnId);
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return 0;
+    return await _db.softDeleteTransaction(txnId, accountId);
   }
 
   // ─────────────────────────────────────────────────────────
@@ -160,7 +163,12 @@ class TransactionRepository {
       return [];
     }
     try {
-      final rows = await _db.getTransactionsByAccount(encryptedAccountNumber);
+      final accountId = LocalStorageService.instance.accountId;
+      if (accountId <= 0) return [];
+      final rows = await _db.getTransactionsByAccount(
+        encryptedAccountNumber,
+        accountId,
+      );
       return rows.map(BankTransactionModel.fromMap).toList();
     } catch (e) {
       log('getByAccount error: $e');

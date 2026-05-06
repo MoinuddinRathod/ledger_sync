@@ -48,7 +48,7 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   encrypt: ^5.0.3
   crypto: ^3.0.7
-  fl_chart: ^1.2.0
+  # fl_chart: ^1.2.0
   uuid: ^4.5.3
   rive: ^0.14.6
   

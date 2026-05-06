@@ -1,0 +1,92 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Cash Tag Not Created During Registration
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists
+  - **Scoped PBT Approach**: For deterministic bugs, scope the property to the concrete failing case(s) to ensure reproducibility
+  - Test that when a new user account is created, both Cash Wallet AND Cash Tag are created
+  - Generate random account names and PINs
+  - For each generated account creation:
+    - Create the account using MasterAccountController.createAccount()
+    - Query the cash_wallet table to verify Cash Wallet exists (should pass)
+    - Query the tags table to verify Cash Tag exists with name="Cash" and user_id=accountId (should fail on unfixed code)
+    - Assert that ensureCashTagExists() was called during account creation
+  - The test assertions should match the Expected Behavior Properties from design (Requirements 2.1, 2.2, 2.5, 2.6)
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (this is correct - it proves the bug exists)
+  - Document counterexamples found to understand root cause (e.g., "Account 'TestUser123' created with Cash Wallet but no Cash Tag")
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 2.1, 2.2, 2.5, 2.6_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - Existing User Data Isolation and Login Flow
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe behavior on UNFIXED code for non-buggy inputs (existing user login, queries, operations)
+  - Write property-based tests capturing observed behavior patterns from Preservation Requirements
+  - Property-based testing generates many test cases for stronger guarantees
+  - Test cases to observe and encode:
+    - **Existing User Login**: Observe that existing users can login successfully → Write property test that verifies login flow is unchanged
+    - **User Data Isolation**: Observe that user data queries filter by accountId → Write property test that verifies User A cannot see User B's Cash Tag or Cash Wallet
+    - **Idempotent Tag Creation**: Observe that ensureCashTagExists() checks for existing tags before creating → Write property test that calling ensureCashTagExists() multiple times returns the same tagId
+    - **Cash Wallet Transaction Creation**: Observe that manual cash wallet transactions can be created → Write property test that manual transaction creation continues to work
+  - Run tests on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (this confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
+
+- [x] 3. Fix for Cash Tag Auto-Creation
+
+  - [x] 3.1 Implement the fix in MasterAccountController.createAccount()
+    - Open file: `lib/features/master_account/controllers/master_account_controller.dart`
+    - Locate the `createAccount()` method (around line 90)
+    - Find the existing try-catch block that creates the Cash Wallet (around line 115)
+    - Inside the `bearCtr.fireSuccess(() async { ... })` callback, after the `insertCashWallet()` call succeeds:
+      - Add a call to `await DatabaseHelper.instance.ensureCashTagExists(result)` where `result` is the newly created accountId
+      - Store the returned cashTagId in a variable
+      - If cashTagId <= 0, log a warning using `debugPrint("Warning: Failed to create Cash tag for account $result")`
+      - If cashTagId > 0, log success using `debugPrint("Cash tag created successfully with ID: $cashTagId")`
+    - Do NOT throw an exception or block account creation if ensureCashTagExists() fails (the tag can be created later)
+    - Ensure the call is awaited to complete before proceeding
+    - _Bug_Condition: isBugCondition(input) where input.accountCreated = true AND input.cashWalletCreated = true AND input.cashTagCreated = false_
+    - _Expected_Behavior: For all new account creation events (accountId > 0), ensureCashTagExists(accountId) SHALL be called to create the user-scoped Cash Tag with predefined keywords_
+    - _Preservation: All user data isolation queries, login flow, and existing ensureCashTagExists() idempotent behavior must remain unchanged_
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
+
+  - [x] 3.2 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Cash Tag Created During Registration
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior
+    - When this test passes, it confirms the expected behavior is satisfied
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed)
+    - Verify that for all generated account creation events:
+      - Cash Wallet exists (should still pass)
+      - Cash Tag exists with name="Cash" and user_id=accountId (should now pass)
+      - CashTagService.initialize() succeeds and cashTagId.value > 0 (should now pass)
+    - _Requirements: 2.1, 2.2, 2.5, 2.6_
+
+  - [x] 3.3 Verify preservation tests still pass
+    - **Property 2: Preservation** - Existing User Data Isolation and Login Flow
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions)
+    - Verify that:
+      - Existing user login flow continues to work exactly as before
+      - User data isolation queries continue to filter by accountId
+      - ensureCashTagExists() remains idempotent (no duplicate tags created)
+      - Cash Wallet transaction creation continues to work
+    - Confirm all tests still pass after fix (no regressions)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6_
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Run all tests (bug condition exploration + preservation property tests)
+  - Verify that:
+    - Bug condition exploration test passes (Cash Tag is created during registration)
+    - Preservation property tests pass (no regressions in existing behavior)
+    - CashTagService.initialize() succeeds after user login
+    - Dual-effect logic applies correctly for cash transactions
+  - If any test fails, investigate and fix before proceeding
+  - Ask the user if questions arise or if manual testing is needed

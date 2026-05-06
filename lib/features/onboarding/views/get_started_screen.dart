@@ -20,7 +20,7 @@ class GetStartedScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Spacer(flex: 2),
-              
+
               // App Logo/Icon
               Container(
                 width: 120,
@@ -48,9 +48,8 @@ class GetStartedScreen extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
-              
               const Spacer(flex: 1),
-              
+
               // App Title
               Text(
                 'Ledger Sync',
@@ -61,9 +60,9 @@ class GetStartedScreen extends StatelessWidget {
                   letterSpacing: -0.5,
                 ),
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // Benefits/Subtitle
               Text(
                 'Track your expenses and income effortlessly.\nSimple accounting for everyone.',
@@ -74,9 +73,9 @@ class GetStartedScreen extends StatelessWidget {
                   height: 1.5,
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
+
               // Feature highlights
               _buildFeatureItem(
                 icon: Icons.speed_rounded,
@@ -98,9 +97,9 @@ class GetStartedScreen extends StatelessWidget {
                 description: 'Understand your spending',
                 colorScheme: colorScheme,
               ),
-              
+
               const Spacer(flex: 2),
-              
+
               // Get Started Button
               SizedBox(
                 width: double.infinity,
@@ -118,15 +117,12 @@ class GetStartedScreen extends StatelessWidget {
                   ),
                   child: const Text(
                     'Get Started',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Skip/Login option for returning users who might have data
               TextButton(
                 onPressed: () {
@@ -134,13 +130,10 @@ class GetStartedScreen extends StatelessWidget {
                 },
                 child: Text(
                   'Already have an account? Sign In',
-                  style: TextStyle(
-                    color: colorScheme.primary,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(color: colorScheme.primary, fontSize: 14),
                 ),
               ),
-              
+
               const Spacer(),
             ],
           ),

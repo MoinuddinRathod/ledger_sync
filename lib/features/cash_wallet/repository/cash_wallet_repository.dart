@@ -1,4 +1,5 @@
 import '../../../core/service/local_db_service/local_db_service.dart';
+import '../../../core/service/local_storage_service.dart';
 import '../models/cash_wallet_model.dart';
 import '../models/cash_wallet_transaction_model.dart';
 
@@ -41,7 +42,9 @@ class CashWalletRepository {
 
   // -------- delete cash wallet transaction ------------- //
   Future<int> deleteCashWalletTransaction(int transactionId) async {
-    return await db.deleteCashWalletTransaction(transactionId);
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return 0;
+    return await db.deleteCashWalletTransaction(transactionId, accountId);
   }
 
   // -------- update cash wallet transaction ------------- //
@@ -49,6 +52,12 @@ class CashWalletRepository {
     CashWalletTransactionModel model,
     int transactionId,
   ) async {
-    return await db.updateCashWalletTransaction(model.toMap(), transactionId);
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return 0;
+    return await db.updateCashWalletTransaction(
+      model.toMap(),
+      transactionId,
+      accountId,
+    );
   }
 }

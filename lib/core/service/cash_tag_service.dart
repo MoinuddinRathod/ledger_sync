@@ -17,7 +17,12 @@ class CashTagService extends GetxService {
   /// Initialize the Cash tag on app startup
   Future<void> initialize() async {
     try {
-      final tagId = await _db.ensureCashTagExists();
+      final accountId = LocalStorageService.instance.accountId;
+      if (accountId <= 0) {
+        log('[CashTagService] No authenticated account, skipping init');
+        return;
+      }
+      final tagId = await _db.ensureCashTagExists(accountId);
       if (tagId > 0) {
         cashTagId.value = tagId;
         isInitialized.value = true;

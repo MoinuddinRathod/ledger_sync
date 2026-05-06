@@ -224,8 +224,9 @@ class AddEditTransactionController extends GetxController {
           await (await db).update(
             'transactions',
             data,
-            where: 'txn_id = ?',
-            whereArgs: [editingTxn!.txnId],
+            where:
+                'txn_id = ? AND txn_account_id IN (SELECT bank_account_number FROM bank_accounts WHERE account_id = ? AND deleted_at IS NULL)',
+            whereArgs: [editingTxn!.txnId, accountId],
           );
 
           await _recomputeTouchedBankBalances(
