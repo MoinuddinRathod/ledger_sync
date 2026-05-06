@@ -29,23 +29,23 @@ class AddEditTransactionScreen extends GetWidget<AddEditTransactionController> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Date Picker (Moved to Top) ──
-              _buildDateField(colorScheme),
-              const SizedBox(height: 24),
-
-              // ── Mode Switch: Bank vs Cash ──
-              _buildSegmentedControl(colorScheme),
-              const SizedBox(height: 24),
-
-              // ── Type Switch: IN (CR) vs OUT (DR) ──
+              // 1. ── Type Switch: IN (CR) vs OUT (DR) ──
               _buildTypeSwitch(colorScheme),
               const SizedBox(height: 24),
 
-              // ── Amount ──
+              // 2. ── Amount ──
               _buildAmountField(colorScheme),
               const SizedBox(height: 24),
 
-              // ── Bank Account (conditionally shown) ──
+              // 3. ── Category (Tag Selection) ──
+              _buildTagSelector(context, colorScheme),
+              const SizedBox(height: 24),
+
+              // 4. ── Mode Switch: Bank vs Cash ──
+              _buildSegmentedControl(colorScheme),
+              const SizedBox(height: 24),
+
+              // 5. ── Bank Account (conditionally shown) ──
               Obx(
                 () => controller.selectedMode.value == 'Bank'
                     ? Column(
@@ -58,15 +58,15 @@ class AddEditTransactionScreen extends GetWidget<AddEditTransactionController> {
                     : const SizedBox.shrink(),
               ),
 
-              // ── Tag Selection ──
-              _buildTagSelector(context, colorScheme),
+              // 6. ── Date Picker (Optional feeling, pushed down) ──
+              _buildDateField(colorScheme),
               const SizedBox(height: 24),
 
-              // ── Note / Narration ──
+              // 7. ── Note / Narration (Optional) ──
               _buildNoteField(colorScheme),
               const SizedBox(height: 48),
 
-              // ── Save Button ──
+              // 8. ── Save Button ──
               SizedBox(
                 width: double.infinity,
                 child: Obx(
@@ -110,126 +110,158 @@ class AddEditTransactionScreen extends GetWidget<AddEditTransactionController> {
   }
 
   Widget _buildSegmentedControl(ColorScheme colorScheme) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Obx(() {
-        final mode = controller.selectedMode.value;
-        // If editing, lock mode based on the transaction type
-        final canChangeMode = controller.editingTxn == null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Payment Mode',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          padding: const EdgeInsets.all(4),
+          child: Obx(() {
+            final mode = controller.selectedMode.value;
+            // If editing, lock mode based on the transaction type
+            final canChangeMode = controller.editingTxn == null;
 
-        return Row(
-          children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: canChangeMode
-                    ? () => controller.selectedMode.value = 'Bank'
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: mode == 'Bank'
-                        ? colorScheme.surface
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: mode == 'Bank'
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
+            return Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: canChangeMode
+                        ? () => controller.selectedMode.value = 'Bank'
                         : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Bank',
-                    style: TextStyle(
-                      fontWeight: mode == 'Bank'
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: mode == 'Bank'
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurface.withValues(alpha: 0.5),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: mode == 'Bank'
+                            ? colorScheme.surface
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: mode == 'Bank'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Bank',
+                        style: TextStyle(
+                          fontWeight: mode == 'Bank'
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: mode == 'Bank'
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: GestureDetector(
-                onTap: canChangeMode
-                    ? () => controller.selectedMode.value = 'Cash'
-                    : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: mode == 'Cash'
-                        ? colorScheme.surface
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: mode == 'Cash'
-                        ? [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.05),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ]
+                Expanded(
+                  child: GestureDetector(
+                    onTap: canChangeMode
+                        ? () => controller.selectedMode.value = 'Cash'
                         : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'Cash',
-                    style: TextStyle(
-                      fontWeight: mode == 'Cash'
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: mode == 'Cash'
-                          ? colorScheme.onSurface
-                          : colorScheme.onSurface.withValues(alpha: 0.5),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: mode == 'Cash'
+                            ? colorScheme.surface
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: mode == 'Cash'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Cash',
+                        style: TextStyle(
+                          fontWeight: mode == 'Cash'
+                              ? FontWeight.w700
+                              : FontWeight.w500,
+                          color: mode == 'Cash'
+                              ? colorScheme.onSurface
+                              : colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          ],
-        );
-      }),
+              ],
+            );
+          }),
+        ),
+      ],
     );
   }
 
   Widget _buildTypeSwitch(ColorScheme colorScheme) {
-    return Obx(() {
-      final type = controller.selectedType.value;
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _TypeChip(
-            title: 'Expense',
-            icon: Icons.arrow_upward_rounded,
-            isSelected: type == 'DR',
-            activeColor: colorScheme.error,
-            onTap: () => controller.selectedType.value = 'DR',
-            colorScheme: colorScheme,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Transaction Type',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
           ),
-          const SizedBox(width: 16),
-          _TypeChip(
-            title: 'Income',
-            icon: Icons.arrow_downward_rounded,
-            isSelected: type == 'CR',
-            activeColor: Colors.green,
-            onTap: () => controller.selectedType.value = 'CR',
-            colorScheme: colorScheme,
-          ),
-        ],
-      );
-    });
+        ),
+        const SizedBox(height: 8),
+        Obx(() {
+          final type = controller.selectedType.value;
+          return Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Expanded(
+                child: _TypeChip(
+                  title: 'Expense',
+                  icon: Icons.arrow_upward_rounded,
+                  isSelected: type == 'DR',
+                  activeColor: colorScheme.error,
+                  onTap: () => controller.selectedType.value = 'DR',
+                  colorScheme: colorScheme,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _TypeChip(
+                  title: 'Income',
+                  icon: Icons.arrow_downward_rounded,
+                  isSelected: type == 'CR',
+                  activeColor: Colors.green,
+                  onTap: () => controller.selectedType.value = 'CR',
+                  colorScheme: colorScheme,
+                ),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
   }
 
   Widget _buildAmountField(ColorScheme colorScheme) {
@@ -516,7 +548,10 @@ class _TypeChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ), // Adjusted padding slightly for expanded row
         decoration: BoxDecoration(
           color: isSelected
               ? activeColor.withValues(alpha: 0.15)
@@ -530,6 +565,7 @@ class _TypeChip extends StatelessWidget {
           ),
         ),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
