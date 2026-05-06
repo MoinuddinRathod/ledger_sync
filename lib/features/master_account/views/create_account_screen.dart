@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/custome_labeled_field.dart';
+import '../controllers/bear_controller.dart';
 import '../controllers/master_account_controller.dart';
-import 'login_screen.dart'; // BearAnimationWidget + BearState
+import '../widgets/bear_animation_widget.dart';
 
 class CreateAccountScreen extends GetView<MasterAccountController> {
-  const CreateAccountScreen({super.key});
-
-  // GlobalKey so we can change the bear's state from focus callbacks
-  static final _bearKey = GlobalKey<BearAnimationWidgetState>();
-
+  CreateAccountScreen({super.key});
+  final bearCtr = Get.find<BearController>();
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -32,13 +30,7 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Bear — NOT inside Obx, driven via GlobalKey
-                Center(
-                  child: BearAnimationWidget(
-                    key: _bearKey,
-                    height: 180,
-                    width: 220,
-                  ),
-                ),
+                Center(child: BearAnimationWidget(height: 180, width: 220)),
                 const SizedBox(height: 12),
 
                 Text(
@@ -94,15 +86,15 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                         hintText: "Enter a name for this account",
                         prefixIcon: Icons.person_outline_rounded,
                         onFocusChange: (hasFocus) {
-                          _bearKey.currentState?.setBearState(
+                          bearCtr.setBearState(
                             hasFocus ? BearState.checking : BearState.idle,
                           );
                         },
                         onChanged: (val) {
                           if (val.isNotEmpty) {
-                            _bearKey.currentState?.setBearState(BearState.speaking);
+                            bearCtr.setBearState(BearState.speaking);
                             controller.startTypingTimer(() {
-                              _bearKey.currentState?.setBearState(BearState.idle);
+                              bearCtr.setBearState(BearState.idle);
                             });
                           }
                         },
@@ -127,19 +119,19 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           onFocusChange: (hasFocus) {
-                            _bearKey.currentState?.setBearState(
+                            bearCtr.setBearState(
                               hasFocus ? BearState.handsUp : BearState.idle,
                             );
                           },
                           onChanged: (val) {
                             if (val.isNotEmpty) {
-                              _bearKey.currentState?.setBearState(
+                              bearCtr.setBearState(
                                 controller.isPinVisible.value
                                     ? BearState.checking
                                     : BearState.handsUp,
                               );
                               controller.startTypingTimer(() {
-                                _bearKey.currentState?.setBearState(BearState.idle);
+                                bearCtr.setBearState(BearState.idle);
                               });
                             }
                           },
@@ -155,7 +147,7 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                           onObscureTap: () {
                             controller.isPinVisible.value =
                                 !controller.isPinVisible.value;
-                            _bearKey.currentState?.setBearState(
+                            bearCtr.setBearState(
                               controller.isPinVisible.value
                                   ? BearState.checking
                                   : BearState.handsUp,
@@ -177,19 +169,19 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           onFocusChange: (hasFocus) {
-                            _bearKey.currentState?.setBearState(
+                            bearCtr.setBearState(
                               hasFocus ? BearState.handsUp : BearState.idle,
                             );
                           },
                           onChanged: (val) {
                             if (val.isNotEmpty) {
-                              _bearKey.currentState?.setBearState(
+                              bearCtr.setBearState(
                                 controller.isConfirmPinVisible.value
                                     ? BearState.checking
                                     : BearState.handsUp,
                               );
                               controller.startTypingTimer(() {
-                                _bearKey.currentState?.setBearState(BearState.idle);
+                                bearCtr.setBearState(BearState.idle);
                               });
                             }
                           },
@@ -205,7 +197,7 @@ class CreateAccountScreen extends GetView<MasterAccountController> {
                           onObscureTap: () {
                             controller.isConfirmPinVisible.value =
                                 !controller.isConfirmPinVisible.value;
-                            _bearKey.currentState?.setBearState(
+                            bearCtr.setBearState(
                               controller.isConfirmPinVisible.value
                                   ? BearState.checking
                                   : BearState.handsUp,

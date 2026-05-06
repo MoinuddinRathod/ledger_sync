@@ -64,15 +64,6 @@ class SetupMasterAccountScreen extends GetView<MasterAccountController> {
                               Get.toNamed(AppRoutes.createAccountScreen),
                         ),
                         const SizedBox(height: 16),
-                        // _buildChoiceCard(
-                        //   context,
-                        //   isDark,
-                        //   title: "Import CSV or Excel",
-                        //   subtitle:
-                        //       "Import your bank statements to start tracking your transactions.",
-                        //   icon: Icons.file_upload_outlined,
-                        //   onTap: () => Get.toNamed(AppRoutes.uploadFileScreen),
-                        // ),
                       ],
                     );
                   } else {
@@ -91,17 +82,6 @@ class SetupMasterAccountScreen extends GetView<MasterAccountController> {
                               Get.toNamed(AppRoutes.chooseAccountScreen),
                         ),
                         const SizedBox(height: 16),
-                        // _buildChoiceCard(
-                        //   context,
-                        //   isDark,
-                        //   title: "Import CSV or Excel",
-                        //   subtitle: "Import your bank statements.",
-                        //   icon: Icons.file_upload_outlined,
-                        //   onTap: () {
-                        //     controller.selectedBankIndex.value = -1;
-                        //     Get.toNamed(AppRoutes.uploadFileScreen);
-                        //   },
-                        // ),
                       ],
                     );
                   }

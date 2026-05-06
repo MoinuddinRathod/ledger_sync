@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:rive/rive.dart';
 import '../../../routes/app_routes.dart';
 import '../../../widgets/app_button.dart';
 import '../../../widgets/custome_labeled_field.dart';
+import '../controllers/bear_controller.dart';
 import '../controllers/master_account_controller.dart';
-
-// ─────────────────────────────────────────────
-// BEAR STATE ENUM
-// Only one state is active at a time.
-// ─────────────────────────────────────────────
-enum BearState { idle, speaking, checking, handsUp }
+import '../widgets/bear_animation_widget.dart';
 
 // ─────────────────────────────────────────────
 // LOGIN SCREEN
@@ -18,21 +13,11 @@ enum BearState { idle, speaking, checking, handsUp }
 class LoginScreen extends GetView<MasterAccountController> {
   const LoginScreen({super.key});
 
-  static final _bearKey = GlobalKey<BearAnimationWidgetState>();
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    // Wire callbacks every build (safe — they're just assignments)
-    controller.onLoginSuccess = (Future<void> Function() onComplete) {
-      _bearKey.currentState?.fireSuccess(onComplete);
-    };
-    controller.onLoginFail = () {
-      _bearKey.currentState?.fireFail();
-    };
-
+    final bearCtr = Get.find<BearController>();
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
@@ -45,8 +30,7 @@ class LoginScreen extends GetView<MasterAccountController> {
               children: [
                 const SizedBox(height: 20),
 
-                // Bear is NOT in Obx — state is driven imperatively via the key
-                BearAnimationWidget(key: _bearKey),
+                const BearAnimationWidget(),
 
                 const SizedBox(height: 16),
 
@@ -120,27 +104,25 @@ class LoginScreen extends GetView<MasterAccountController> {
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           onFocusChange: (hasFocus) {
-                            _bearKey.currentState?.setBearState(
+                            bearCtr.setBearState(
                               hasFocus ? BearState.handsUp : BearState.idle,
                             );
                           },
                           onChanged: (val) {
                             if (val.isNotEmpty) {
-                              _bearKey.currentState?.setBearState(
+                              bearCtr.setBearState(
                                 controller.isPinVisible.value
                                     ? BearState.checking
                                     : BearState.handsUp,
                               );
                               controller.startTypingTimer(() {
-                                _bearKey.currentState?.setBearState(
-                                  BearState.idle,
-                                );
+                                bearCtr.setBearState(BearState.idle);
                               });
                             }
                           },
                           onObscureTap: () {
                             controller.togglePinVisibility();
-                            _bearKey.currentState?.setBearState(
+                            bearCtr.setBearState(
                               controller.isPinVisible.value
                                   ? BearState.checking
                                   : BearState.handsUp,
@@ -198,132 +180,6 @@ class LoginScreen extends GetView<MasterAccountController> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// BEAR ANIMATION WIDGET
-// Uses the modern rive 0.14 API:
-//   File.asset() → RiveWidgetController → dataBind(DataBind.auto())
-//   → ViewModelInstance.boolean() / .trigger()
-//
-// The bear has ONE active state at a time (BearState enum).
-// State is driven imperatively via the GlobalKey from the parent screen.
-// ─────────────────────────────────────────────
-class BearAnimationWidget extends StatefulWidget {
-  final double height;
-  final double width;
-
-  const BearAnimationWidget({super.key, this.height = 220, this.width = 280});
-
-  @override
-  State<BearAnimationWidget> createState() => BearAnimationWidgetState();
-}
-
-class BearAnimationWidgetState extends State<BearAnimationWidget> {
-  late final FileLoader _fileLoader;
-  RiveWidgetController? _riveController;
-  StateMachine? _stateMachine;
-  bool _loaded = false;
-  BearState _bearState = BearState.idle;
-
-  @override
-  void initState() {
-    super.initState();
-    _fileLoader = FileLoader.fromAsset(
-      'assets/animations/9940-18945-speaking-bear.riv',
-      riveFactory: Factory.rive,
-    );
-    _loadRive();
-  }
-
-  Future<void> _loadRive() async {
-    final file = await File.asset(
-      'assets/animations/9940-18945-speaking-bear.riv',
-      riveFactory: Factory.rive,
-    );
-
-    if (file == null || !mounted) return;
-
-    final riveController = RiveWidgetController(file);
-
-    // Direct StateMachine access — no dataBind needed
-    final sm = riveController.stateMachine;
-
-    debugPrint('=== Bear inputs ===');
-    for (final input in sm?.inputs ?? []) {
-      debugPrint('  name: "${input.name}"  type: ${input.runtimeType}');
-    }
-
-    setState(() {
-      _riveController = riveController;
-      _stateMachine = sm;
-      _loaded = true;
-    });
-
-    _applyBearState();
-  }
-
-  void _applyBearState() {
-    final sm = _stateMachine;
-    if (sm == null) return;
-
-    sm.boolean('Speaking')?.value = _bearState == BearState.speaking;
-    sm.boolean('Check')?.value = _bearState == BearState.checking;
-    sm.boolean('hands_up')?.value = _bearState == BearState.handsUp;
-  }
-
-  void setBearState(BearState newState) {
-    if (_bearState == newState) return;
-    setState(() {
-      _bearState = newState;
-    });
-    _applyBearState();
-  }
-
-  void fireFail() {
-    _stateMachine?.trigger('fail')?.fire();
-  }
-
-  void fireSuccess(VoidCallback onComplete) {
-    _stateMachine?.trigger('success')?.fire();
-    Future.delayed(const Duration(milliseconds: 2500), onComplete);
-  }
-
-  @override
-  void dispose() {
-    _riveController?.dispose();
-    _fileLoader.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Center(
-      child: Container(
-        height: widget.height,
-        width: widget.width,
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E2040) : const Color(0xFFF0F2FF),
-          borderRadius: BorderRadius.circular(32),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.06),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: _loaded && _riveController != null
-              ? RiveWidget(controller: _riveController!, fit: Fit.contain)
-              : const Center(child: CircularProgressIndicator(strokeWidth: 2)),
         ),
       ),
     );

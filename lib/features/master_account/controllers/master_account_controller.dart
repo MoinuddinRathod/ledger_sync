@@ -8,6 +8,7 @@ import '../../../routes/app_routes.dart';
 import '../models/account_model.dart';
 import '../services/password_encryption_decryption_service.dart';
 import '../services/session_service.dart';
+import 'bear_controller.dart';
 
 class MasterAccountController extends GetxController {
   // ── Controllers ──
@@ -23,11 +24,6 @@ class MasterAccountController extends GetxController {
   final RxBool isAcceptedTerms = false.obs;
   final RxList<AccountModel> accounts = <AccountModel>[].obs;
   final Rxn<AccountModel> selectedAccount = Rxn<AccountModel>();
-
-  // ── Bear Animation Callbacks ──
-  // These are set by LoginScreen every build (safe — just assignments).
-  Function(Future<void> Function() onComplete)? onLoginSuccess;
-  Function? onLoginFail;
 
   // ── Typing Debouncer ──
   Timer? _typingTimer;
@@ -104,15 +100,18 @@ class MasterAccountController extends GetxController {
     );
 
     final result = await DatabaseHelper.instance.insertAccount(account);
-
+    // -- Bear Controller for handle success and failures
+    final bearCtr = Get.find<BearController>();
     if (result != -1) {
       //  CREATE CASH WALLET ASSOCIATED WITH MASTER ACCOUNT
       try {
-        await DatabaseHelper.instance.insertCashWallet({
-          'account_id': result,
-          'current_balance': 0.0,
-          'date_added': DateTime.now().toIso8601String(),
-          'created_at': DateTime.now().toIso8601String(),
+        bearCtr.fireSuccess(() async {
+          await DatabaseHelper.instance.insertCashWallet({
+            'account_id': result,
+            'current_balance': 0.0,
+            'date_added': DateTime.now().toIso8601String(),
+            'created_at': DateTime.now().toIso8601String(),
+          });
         });
       } catch (e) {
         debugPrint("Error creating cash wallet: $e");
@@ -126,6 +125,7 @@ class MasterAccountController extends GetxController {
       await fetchAccounts();
       Get.offAllNamed(AppRoutes.masterAccountSetupScreen);
     } else {
+      bearCtr.fireFail();
       SnackbarService.showError(
         title: 'Oops!',
         message: "Failed to create account",
@@ -135,6 +135,9 @@ class MasterAccountController extends GetxController {
     isLoading.value = false;
   }
 
+  void togglePinVisibility() {
+    isPinVisible.value = !isPinVisible.value;
+  }
   // ─────────────────────────────────────────────
   // LOGIN
   // 1. Hash entered PIN
@@ -144,14 +147,12 @@ class MasterAccountController extends GetxController {
   // 5. Navigate to home
   // ─────────────────────────────────────────────
 
-  void togglePinVisibility() {
-    isPinVisible.value = !isPinVisible.value;
-  }
-
   // ─────────────────────────────────────────────
   // LOGIN METHOD
   // ─────────────────────────────────────────────
   Future<void> login() async {
+    // -- Bear Controller for handle success and failures
+    final bearCtr = Get.find<BearController>();
     if (!formKey.currentState!.validate()) return;
 
     isLoading.value = true;
@@ -165,11 +166,12 @@ class MasterAccountController extends GetxController {
 
     if (accountId != -1) {
       // Bear celebrates → navigation fires only after animation ends
-      onLoginSuccess?.call(() async {
+      bearCtr.fireSuccess(() async {
         await _sessionService.saveSession(
           accountId: accountId,
           accountName: accountNameController.text.trim(),
         );
+
         final local = LocalStorageService.instance;
         local.accountName = accountNameController.text.trim();
         local.isLoggedIn = true;
@@ -178,7 +180,7 @@ class MasterAccountController extends GetxController {
         Get.offAllNamed(AppRoutes.homeScreen);
       });
     } else {
-      onLoginFail?.call();
+      bearCtr.fireFail();
       await Future.delayed(const Duration(milliseconds: 1500));
       SnackbarService.showError(
         title: 'Login failed',
