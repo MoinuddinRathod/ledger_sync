@@ -291,7 +291,7 @@
 //               {"name": "salary", "priority": 1},
 //               {"name": "payment", "priority": 2},
 //             ],
-//             tagPriority: 1, // Global tag
+//             tagPriority: 2, // Global tag
 //             tagUserId: testAccountId,
 //             tagBankAccountId: null,
 //             tagCreatedAt: DateTime.now().toIso8601String(),

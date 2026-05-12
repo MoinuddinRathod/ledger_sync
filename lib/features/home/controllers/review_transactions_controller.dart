@@ -52,11 +52,19 @@ class ReviewTransactionsController extends GetxController {
   Future<void> loadTagsThenAutoMatch() async {
     final result = await _repo.getAllTags();
 
-    tags.assignAll(result);
+    tags.assignAll(
+      result
+          .where(
+            (e) =>
+                e.tagBankAccountId == null ||
+                e.tagBankAccountId == _bankAccountNumber,
+          )
+          .toList(),
+    );
     _autoMatchTransactions(); // ← run after tags are ready
   }
 
-  // -- auto mathc transactions ----- //
+  // -- auto match transactions ----- //
   void _autoMatchTransactions() {
     if (tags.isEmpty) return;
 
@@ -72,27 +80,21 @@ class ReviewTransactionsController extends GetxController {
       TagModel? bestMatch;
       String? bestKeyword;
 
-      // ── STEP 1: Try Bank Account Level tags first (priority = 3 in DB? or 2?)
-      // Based on your description: bankAccount=3(int), party=2, global=1
-      // But your DB comment says: bankAccount stores account number + int=2 for party, int=1 for global
-      // Let's follow: tagPriority=3 → bank account level, =2 → party, =1 → global, =0 → global
-      // Actually from your tagTransaction(): Bank=3, Party=2, Global=1
-      // And your _autoMatchTransactions comment says Bank(3) > Party(2) > Global(1)
-
-      // Try each scope level in descending priority order
-      for (final scopeLevel in [3, 1, 0]) {
+      // Priority system: 0 = Bank Account Level (highest), 1 = Party Level, 2 = Global (lowest)
+      // Try each priority level in ascending order (0 → 1 → 2)
+      for (final priorityLevel in [0, 1, 2]) {
         final scopeTags = tags
-            .where((t) => t.tagPriority == scopeLevel)
+            .where((t) => t.tagPriority == priorityLevel)
             .toList();
 
         if (scopeTags.isEmpty) continue;
 
-        // For bank account level, only consider tags matching THIS transaction's bank account
-        final filteredTags = scopeLevel == 3
+        // For bank account level (0), only consider tags matching THIS transaction's bank account
+        final filteredTags = priorityLevel == 0
             ? scopeTags
                   .where((t) => t.tagBankAccountId == txnBankAccountNumber)
                   .toList()
-            : scopeLevel == 1
+            : priorityLevel == 1
             ? scopeTags
                   .where(
                     (t) =>
@@ -255,7 +257,6 @@ class ReviewTransactionsController extends GetxController {
           )
           .toList();
     }
-
     return list;
   }
 
@@ -298,9 +299,9 @@ class ReviewTransactionsController extends GetxController {
     try {
       isSaving.value = true;
 
-      int scopePriorityValue = 1;
-      if (scopePriorityLabel == 'Party Level') scopePriorityValue = 2;
-      if (scopePriorityLabel == 'Bank Account Level') scopePriorityValue = 3;
+      int scopePriorityValue = 2; // Default to Global
+      if (scopePriorityLabel == 'Party Level') scopePriorityValue = 1;
+      if (scopePriorityLabel == 'Bank Account Level') scopePriorityValue = 0;
 
       final now = DateTime.now().toIso8601String();
       TagModel? lastSavedTag;
@@ -712,4 +713,17 @@ class MappableTransaction {
       bankAccountNumber: bankAccountNumber ?? this.bankAccountNumber,
     );
   }
+
+  //  var data = {
+  //   tag_id: 9,
+  //   tag_name: Freelance,
+  //   tag_keywords: [
+  //     {"name":"freelance/sbi","priority":1},
+  //     {"name":"freelance","priority":2}],
+  //     tag_priority: 0, // Bank Account Level (highest priority)
+  //     tag_bank_account_id: ZNxy61zxQ/nU2UafXqK78jcQyTegCR/jdLzUI6xom9w=,
+  //      tag_user_id: 1, tag_created_at: 2026-05-07T13:00:34.661130,
+  //      tag_updated_at: 2026-05-07T13:00:34.661130, tag_deleted_at: null,
+  //      totalDr: 0, totalCr: 15000.0
+  //      };
 }

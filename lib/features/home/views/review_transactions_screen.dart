@@ -119,7 +119,6 @@ List<String> _buildKeywordPreview(MappableTransaction txn) {
     'ach',
     'ecs',
     'transfer',
-    'payment',
     'transaction',
     'debit',
     'credit',

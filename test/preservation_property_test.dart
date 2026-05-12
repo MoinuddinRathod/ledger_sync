@@ -80,7 +80,7 @@ void main() {
             tagKeywords: [
               {"name": tagName.toLowerCase(), "priority": 1},
             ],
-            tagPriority: 1, // Global tag
+            tagPriority: 2, // Global tag
             tagUserId: testAccountId,
             tagBankAccountId: null,
             tagCreatedAt: DateTime.now().toIso8601String(),
@@ -408,7 +408,7 @@ void main() {
             tagKeywords: [
               {"name": "test", "priority": 1},
             ],
-            tagPriority: 1,
+            tagPriority: 2,
             tagUserId: testAccountId,
             tagBankAccountId: null,
             tagCreatedAt: DateTime.now().toIso8601String(),
@@ -469,7 +469,7 @@ void main() {
             tagKeywords: [
               {"name": "noncash", "priority": 1},
             ],
-            tagPriority: 1,
+            tagPriority: 2,
             tagUserId: testAccountId,
             tagBankAccountId: null,
             tagCreatedAt: DateTime.now().toIso8601String(),
@@ -517,7 +517,7 @@ void main() {
             tagKeywords: [
               {"name": "sequence", "priority": 1},
             ],
-            tagPriority: 1,
+            tagPriority: 2,
             tagUserId: testAccountId,
             tagBankAccountId: null,
             tagCreatedAt: DateTime.now().toIso8601String(),

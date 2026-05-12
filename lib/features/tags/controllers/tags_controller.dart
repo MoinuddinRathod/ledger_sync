@@ -212,13 +212,13 @@ class TagsController extends GetxController {
   int mapScopeToPriority(String scope) {
     switch (scope) {
       case 'Global':
-        return 0;
+        return 2;
       case 'Party Level':
         return 1;
       case 'Bank Account Level':
-        return 3;
-      default:
         return 0;
+      default:
+        return 2;
     }
   }
 
@@ -226,11 +226,11 @@ class TagsController extends GetxController {
   String mapPriorityToScope(int priority) {
     switch (priority) {
       case 0:
-        return 'Global';
+        return 'Bank Account Level';
       case 1:
         return 'Party Level';
-      case 3:
-        return 'Bank Account Level';
+      case 2:
+        return 'Global';
       default:
         return 'Global';
     }
@@ -372,7 +372,10 @@ class TagsController extends GetxController {
         title: editingTag != null ? 'Tag Updated' : 'Tag Created',
         message: editingTag != null
             ? '$tagName updated successfully.'
-            : '{tagName} saved with {count} keyword{s}.'.replaceAll('{tagName}', tagName).replaceAll('{count}', keywordsToSave.length.toString()).replaceAll('{s}', keywordsToSave.length > 1 ? 's' : ''),
+            : '{tagName} saved with {count} keyword{s}.'
+                  .replaceAll('{tagName}', tagName)
+                  .replaceAll('{count}', keywordsToSave.length.toString())
+                  .replaceAll('{s}', keywordsToSave.length > 1 ? 's' : ''),
       );
 
       clearCreateTagState();
@@ -567,7 +570,10 @@ class TagsController extends GetxController {
       Get.back();
       SnackbarService.showSuccess(
         title: 'Tag Updated',
-        message: '{tagName} updated successfully.'.replaceAll('{tagName}', model.tagName),
+        message: '{tagName} updated successfully.'.replaceAll(
+          '{tagName}',
+          model.tagName,
+        ),
       );
       _refreshView();
       clearForm();

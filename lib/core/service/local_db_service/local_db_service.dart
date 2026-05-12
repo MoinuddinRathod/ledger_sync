@@ -281,7 +281,10 @@ class DatabaseHelper {
   }
 
   // -------- delete bank account ------------- //
-  Future<int> deleteBankAccount(String encryptedAccountNumber, int accountId) async {
+  Future<int> deleteBankAccount(
+    String encryptedAccountNumber,
+    int accountId,
+  ) async {
     if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
@@ -382,7 +385,10 @@ class DatabaseHelper {
   }
 
   // -------- delete cash wallet transaction ------------- //
-  Future<int> deleteCashWalletTransaction(int transactionId, int accountId) async {
+  Future<int> deleteCashWalletTransaction(
+    int transactionId,
+    int accountId,
+  ) async {
     if (!_isValidAccountId(accountId)) return 0;
     final db = await instance.database;
     return await db.update(
@@ -461,7 +467,8 @@ class DatabaseHelper {
     try {
       if (!_isValidAccountId(userId)) return [];
       final db = await instance.database;
-      final result = await db.rawQuery('''
+      final result = await db.rawQuery(
+        '''
         SELECT
           tg.*,
           COALESCE(SUM(CASE WHEN UPPER(t.$TXN_TYPE) = 'DR' THEN t.$TXN_AMOUNT ELSE 0 END), 0.0) as totalDr,
@@ -471,7 +478,12 @@ class DatabaseHelper {
         WHERE tg.$TAG_USER_ID = ? AND tg.$TAG_DELETED_AT IS NULL
         GROUP BY tg.$TAG_ID
         ORDER BY tg.$TAG_PRIORITY ASC
-      ''', [userId]);
+      ''',
+        [userId],
+      );
+      log(
+        "here is all tags presents : : : : ::  :: :: : : : : ${result.toList()}",
+      );
       return result.map((e) => TagModel.fromMap(e)).toList();
     } catch (e) {
       log(e.toString());
@@ -582,7 +594,8 @@ class DatabaseHelper {
     int masterAccountId,
   ) async {
     try {
-      if (encryptedAccountNumber.isEmpty || !_isValidAccountId(masterAccountId)) {
+      if (encryptedAccountNumber.isEmpty ||
+          !_isValidAccountId(masterAccountId)) {
         return [];
       }
       final db = await instance.database;

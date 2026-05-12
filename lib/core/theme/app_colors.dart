@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 /// ===============================
-/// LIGHT MODE COLORS
-/// ===============================
-/// ===============================
 /// LIGHT MODE COLORS (MODERN)
 /// ===============================
 class AppColorsLight {

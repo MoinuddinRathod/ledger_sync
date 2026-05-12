@@ -170,7 +170,7 @@ FUNCTION _initFormState()
     tagId: editingTxn.txnTagId,
     tagName: editingTxn.resolvedTagName,
     tagKeywords: [],
-    tagPriority: 3,
+    tagPriority: 0, // Default to Bank Account Level
     tagCreatedAt: DateTime.now().toIso8601String(),
   )
   

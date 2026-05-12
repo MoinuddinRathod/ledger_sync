@@ -1,4 +1,3 @@
-
 const String LEDGER_SYNC_DB = "ledger_sync_db.db";
 const String TABLE_ACCOUNTS = "accounts";
 const String ACCOUNT_ID = "account_id";
@@ -68,7 +67,7 @@ const String TAG_ID = "tag_id";
 const String TAG_NAME = "tag_name";
 const String TAG_KEYWORDS = "tag_keywords";
 const String TAG_PRIORITY =
-    "tag_priority"; // 1 == bank account level 2 == party level 3 == global
+    "tag_priority"; // 0 = bank account level (highest), 1 = party level, 2 = global (lowest)
 const String TAG_BANK_ACCOUNT_ID =
     "tag_bank_account_id"; // FOREIGN KEY IF TAG IS ACCOUNT LEVEL
 const String TAG_USER_ID =
