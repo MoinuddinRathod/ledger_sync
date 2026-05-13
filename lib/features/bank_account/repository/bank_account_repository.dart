@@ -30,14 +30,37 @@ class BankAccountRepository {
   ) async {
     final accountId = LocalStorageService.instance.accountId;
     if (accountId <= 0) return 0;
-    return await db.updateBankAccount(model, oldEncryptedAccountNumber, accountId);
+    return await db.updateBankAccount(
+      model,
+      oldEncryptedAccountNumber,
+      accountId,
+    );
   }
 
-  // delete bank account -------- //
-  Future<int> deleteBankAccount(String bankAccountNumber) async {
+  // toggle bank account active -------- //
+  Future<int> toggleBankAccountActive(
+    String encryptedAccountNumber,
+    bool isActive,
+  ) async {
     final accountId = LocalStorageService.instance.accountId;
     if (accountId <= 0) return 0;
-    return await db.deleteBankAccount(bankAccountNumber, accountId);
+    return await db.toggleBankAccountActive(
+      encryptedAccountNumber,
+      isActive,
+      accountId,
+    );
+  }
+
+  // permanently delete bank account -------- //
+  Future<int> permanentlyDeleteBankAccount(
+    String encryptedAccountNumber,
+  ) async {
+    final accountId = LocalStorageService.instance.accountId;
+    if (accountId <= 0) return 0;
+    return await db.permanentlyDeleteBankAccount(
+      encryptedAccountNumber,
+      accountId,
+    );
   }
 
   // update bank balance ------- //

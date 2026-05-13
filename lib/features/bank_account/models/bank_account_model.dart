@@ -14,6 +14,7 @@ class BankAccountModel {
   String createdAt;
   String? updatedAt;
   String? deletedAt;
+  bool isActive;
 
   BankAccountModel({
     required this.encryptedAccountNumber,
@@ -28,6 +29,7 @@ class BankAccountModel {
     required this.createdAt,
     this.updatedAt,
     this.deletedAt,
+    this.isActive = true,
   });
 
   // ------------------------------------------------------------------ //
@@ -46,6 +48,7 @@ class BankAccountModel {
       CREATED_AT: createdAt,
       UPDATED_AT: updatedAt,
       DELETED_AT: deletedAt,
+      IS_ACTIVE: isActive ? 1 : 0,
       // bankAccountNumber is intentionally NOT in toMap — never persisted
     };
   }
@@ -67,6 +70,7 @@ class BankAccountModel {
       createdAt: map[CREATED_AT] as String,
       updatedAt: map[UPDATED_AT] as String?,
       deletedAt: map[DELETED_AT] as String?,
+      isActive: (map[IS_ACTIVE] as int? ?? 1) == 1,
     );
   }
 
@@ -86,6 +90,7 @@ class BankAccountModel {
     String? createdAt,
     String? updatedAt,
     String? deletedAt,
+    bool? isActive,
   }) {
     return BankAccountModel(
       encryptedAccountNumber:
@@ -101,6 +106,7 @@ class BankAccountModel {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      isActive: isActive ?? this.isActive,
     );
   }
 
@@ -120,7 +126,8 @@ class BankAccountModel {
         'dateAdded: $dateAdded, '
         'createdAt: $createdAt, '
         'updatedAt: $updatedAt, '
-        'deletedAt: $deletedAt'
+        'deletedAt: $deletedAt, '
+        'isActive: $isActive'
         ')';
   }
 }

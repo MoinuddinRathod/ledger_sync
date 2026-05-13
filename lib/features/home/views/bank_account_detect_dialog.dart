@@ -243,7 +243,7 @@ class BankAccountDetectDialog extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildInputLabel(theme, "Initial Balance"),
+                            _buildInputLabel(theme, "Balance"),
                             TextFormField(
                               controller: controller.balanceCtrl,
                               keyboardType:

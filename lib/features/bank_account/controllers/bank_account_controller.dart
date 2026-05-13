@@ -46,13 +46,15 @@ class BankAccountController extends GetxController {
   final RxBool isLoadingAdd = false.obs;
   final RxBool isLoadingUpdate = false.obs;
   final RxBool isLoadingDelete = false.obs;
+  final RxBool isLoadingToggle = false.obs;
 
   /// True whenever ANY operation is in progress
   bool get isBusy =>
       isLoadingFetch.value ||
       isLoadingAdd.value ||
       isLoadingUpdate.value ||
-      isLoadingDelete.value;
+      isLoadingDelete.value ||
+      isLoadingToggle.value;
 
   // ------------------------------------------------------------------ //
   // Lifecycle
@@ -228,7 +230,10 @@ class BankAccountController extends GetxController {
       Get.back();
       SnackbarService.showSuccess(
         title: 'Account Added',
-        message: '{bankName} account added.'.replaceAll('{bankName}', model.bankName),
+        message: '{bankName} account added.'.replaceAll(
+          '{bankName}',
+          model.bankName,
+        ),
       );
       clearForm();
       _closeSheet();
@@ -315,19 +320,73 @@ class BankAccountController extends GetxController {
   }
 
   // ------------------------------------------------------------------ //
-  // DELETE — also clear cached reveal
+  // TOGGLE ACTIVE — toggle account active/inactive state
   // ------------------------------------------------------------------ //
-  Future<void> deleteBankAccount({
-    required String encryptedAccountNumber,
-  }) async {
-    if (encryptedAccountNumber.isEmpty) return;
+  Future<void> toggleAccountActive(BankAccountModel account) async {
+    if (isLoadingToggle.value) return;
+
+    try {
+      isLoadingToggle.value = true;
+
+      final newState = !account.isActive;
+      final int rowsAffected = await _repo.toggleBankAccountActive(
+        account.encryptedAccountNumber,
+        newState,
+      );
+
+      if (rowsAffected == 0) {
+        SnackbarService.showWarning(
+          title: 'Not Found',
+          message: 'Account not found to update.',
+        );
+        return;
+      }
+
+      // Update local state
+      final int idx = bankAccounts.indexWhere(
+        (e) => e.encryptedAccountNumber == account.encryptedAccountNumber,
+      );
+      if (idx != -1) {
+        bankAccounts[idx] = account.copyWith(
+          isActive: newState,
+          updatedAt: DateTime.now().toIso8601String(),
+        );
+      }
+
+      // Refresh list to apply filter
+      await fetchBankAccounts(
+        accountId: LocalStorageService.instance.accountId,
+      );
+
+      SnackbarService.showSuccess(
+        title: newState ? 'Account Activated' : 'Account Deactivated',
+        message:
+            '${account.bankName} is now ${newState ? "active" : "inactive"}.',
+      );
+    } catch (e, stack) {
+      log('[BankAccountController] toggleAccountActive: $e', stackTrace: stack);
+      SnackbarService.showError(
+        title: 'Toggle Failed',
+        message: 'Could not update account status.',
+      );
+    } finally {
+      isLoadingToggle.value = false;
+    }
+  }
+
+  // ------------------------------------------------------------------ //
+  // PERMANENTLY DELETE ACCOUNT — hard delete with cascading cleanup
+  // ------------------------------------------------------------------ //
+  Future<void> permanentlyDeleteAccount(BankAccountModel account) async {
     if (isLoadingDelete.value) return;
 
     try {
       isLoadingDelete.value = true;
-      final int rowsAffected = await _repo.deleteBankAccount(
-        encryptedAccountNumber,
+
+      final int rowsAffected = await _repo.permanentlyDeleteBankAccount(
+        account.encryptedAccountNumber,
       );
+
       if (rowsAffected == 0) {
         SnackbarService.showWarning(
           title: 'Not Found',
@@ -335,21 +394,31 @@ class BankAccountController extends GetxController {
         );
         return;
       }
+
+      // Remove from local state
       bankAccounts.removeWhere(
-        (e) => e.encryptedAccountNumber == encryptedAccountNumber,
+        (e) => e.encryptedAccountNumber == account.encryptedAccountNumber,
       );
-      revealedNumbers.remove(encryptedAccountNumber);
-      accountVisibility.remove(encryptedAccountNumber);
-      Get.back();
+
+      // Clear cached reveal data
+      revealedNumbers.remove(account.encryptedAccountNumber);
+      accountVisibility.remove(account.encryptedAccountNumber);
+
+      Get.back(); // Close any open dialogs
+
       SnackbarService.showSuccess(
         title: 'Account Deleted',
-        message: 'Account deleted successfully.',
+        message:
+            '${account.bankName} and all related data permanently deleted.',
       );
     } catch (e, stack) {
-      log('[BankAccountController] deleteBankAccount: $e', stackTrace: stack);
+      log(
+        '[BankAccountController] permanentlyDeleteAccount: $e',
+        stackTrace: stack,
+      );
       SnackbarService.showError(
         title: 'Delete Failed',
-        message: 'Unexpected error.',
+        message: 'Could not delete account. Please try again.',
       );
     } finally {
       isLoadingDelete.value = false;

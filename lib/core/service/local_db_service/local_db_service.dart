@@ -57,6 +57,7 @@ class DatabaseHelper {
         $CREATED_AT TEXT NOT NULL,
         $UPDATED_AT TEXT,
         $DELETED_AT TEXT,
+        $IS_ACTIVE INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY ($ACCOUNT_ID) REFERENCES $TABLE_ACCOUNTS($ACCOUNT_ID)
       )
     ''');
@@ -233,7 +234,7 @@ class DatabaseHelper {
     final db = await instance.database;
     final result = await db.query(
       TABLE_BANK_ACCOUNTS,
-      where: "$ACCOUNT_ID = ? AND $DELETED_AT IS NULL",
+      where: "$ACCOUNT_ID = ?",
       whereArgs: [accountId],
     );
     return result.map((e) => BankAccountModel.fromMap(e)).toList();
@@ -281,6 +282,9 @@ class DatabaseHelper {
   }
 
   // -------- delete bank account ------------- //
+  @Deprecated(
+    'Use toggleBankAccountActive or permanentlyDeleteBankAccount instead',
+  )
   Future<int> deleteBankAccount(
     String encryptedAccountNumber,
     int accountId,
@@ -293,6 +297,70 @@ class DatabaseHelper {
       where: "$BANK_ACCOUNT_NUMBER = ? AND $ACCOUNT_ID = ?",
       whereArgs: [encryptedAccountNumber, accountId],
     );
+  }
+
+  // -------- toggle bank account active state ------------- //
+  Future<int> toggleBankAccountActive(
+    String encryptedAccountNumber,
+    bool isActive,
+    int accountId,
+  ) async {
+    if (!_isValidAccountId(accountId)) return 0;
+    final db = await instance.database;
+    return await db.update(
+      TABLE_BANK_ACCOUNTS,
+      {
+        IS_ACTIVE: isActive ? 1 : 0,
+        UPDATED_AT: DateTime.now().toIso8601String(),
+      },
+      where: "$BANK_ACCOUNT_NUMBER = ? AND $ACCOUNT_ID = ?",
+      whereArgs: [encryptedAccountNumber, accountId],
+    );
+  }
+
+  // -------- permanently delete bank account ------------- //
+  Future<int> permanentlyDeleteBankAccount(
+    String encryptedAccountNumber,
+    int accountId,
+  ) async {
+    if (!_isValidAccountId(accountId)) return 0;
+    final db = await instance.database;
+
+    return await db.transaction((txn) async {
+      final now = DateTime.now().toIso8601String();
+
+      // Step 1: Soft-delete all linked transactions
+      await txn.update(
+        TABLE_TRANSACTIONS,
+        {DELETED_AT: now},
+        where: "$TXN_ACCOUNT_ID = ?",
+        whereArgs: [encryptedAccountNumber],
+      );
+
+      // Step 2: Hard-delete all linked import_sessions
+      await txn.delete(
+        TABLE_IMPORT_SESSIONS,
+        where: "$IMPORT_BANK_ACCOUNT_NUMBER = ?",
+        whereArgs: [encryptedAccountNumber],
+      );
+
+      // Step 3: Soft-delete all bank-scoped tags
+      await txn.update(
+        TABLE_TAGS,
+        {TAG_DELETED_AT: now},
+        where: "$TAG_BANK_ACCOUNT_ID = ?",
+        whereArgs: [encryptedAccountNumber],
+      );
+
+      // Step 4: Hard-delete the bank_account row
+      final rowsDeleted = await txn.delete(
+        TABLE_BANK_ACCOUNTS,
+        where: "$BANK_ACCOUNT_NUMBER = ? AND $ACCOUNT_ID = ?",
+        whereArgs: [encryptedAccountNumber, accountId],
+      );
+
+      return rowsDeleted;
+    });
   }
 
   // =========================================== //
@@ -1027,7 +1095,7 @@ class DatabaseHelper {
       final tagId = await db.insert(TABLE_TAGS, {
         TAG_NAME: 'Cash',
         TAG_KEYWORDS: keywords,
-        TAG_PRIORITY: 0, // Highest priority - must match first
+        TAG_PRIORITY: 2, // Highest priority - must match first
         TAG_USER_ID: userId,
         TAG_BANK_ACCOUNT_ID: null,
         TAG_CREATED_AT: now,

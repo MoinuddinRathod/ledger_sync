@@ -82,7 +82,6 @@ class BankAccountsScreen extends GetWidget<BankAccountController> {
     BankAccountModel account,
     NumberFormat formatter,
   ) {
-    // Generate a deterministic color for the logo based on the bank name length
     final colors = [
       Colors.deepPurpleAccent,
       Colors.redAccent,
@@ -92,240 +91,316 @@ class BankAccountsScreen extends GetWidget<BankAccountController> {
     ];
     final logoColor = colors[account.bankName.length % colors.length];
 
-    // Adaptive colors based on the dashboard card reference
-    final topBgColor = isDark
-        ? const Color(0xFF2A2D52)
-        : const Color(0xFFE4E6FF);
-    final bottomBgColor = isDark ? const Color(0xFF1A1C35) : Colors.white;
+    final cardBg = isDark ? const Color(0xFF1E213A) : Colors.white;
+    final borderColor =
+        isDark ? const Color(0xFF2D325A) : const Color(0xFFEFEFFF);
 
-    final titleColor = theme.colorScheme.onSurface;
-    final subtitleColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
-    final balanceColor = theme.colorScheme.onSurface;
-    final holderColor = theme.colorScheme.onSurface.withValues(alpha: 0.5);
-
-    return GestureDetector(
-      onTap: () {
-        Get.toNamed(
-          AppRoutes.transactionsScreen,
-          arguments: {'encryptedAccountNumber': account.encryptedAccountNumber},
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Column(
-            children: [
-              // --- TOP HALF: Bank Info & Actions ---
-              Container(
-                color: topBgColor,
-                padding: const EdgeInsets.only(
-                  left: 16,
-                  top: 12,
-                  bottom: 12,
-                  right: 8,
-                ),
-                child: Row(
-                  children: [
-                    // Simulated blurred bank logo
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: logoColor.withValues(alpha: 0.4),
-                            blurRadius: 10,
-                            spreadRadius: 1,
+    return Container(
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              Get.toNamed(
+                AppRoutes.transactionsScreen,
+                arguments: {
+                  'encryptedAccountNumber': account.encryptedAccountNumber,
+                },
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // --- Top Section: Logo, Bank Info, Switch ---
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              logoColor,
+                              logoColor.withValues(alpha: 0.7),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
                           ),
-                        ],
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: logoColor.withValues(alpha: 0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.account_balance_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                       ),
-                      child: Center(
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: logoColor,
-                            shape: BoxShape.circle,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              account.bankName,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            Text(
+                              account.accountType,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Reduced size Switch
+                      Transform.scale(
+                        scale: 0.75,
+                        child: Obx(
+                          () => Switch(
+                            value: account.isActive,
+                            onChanged: controller.isLoadingToggle.value
+                                ? null
+                                : (value) {
+                                    controller.toggleAccountActive(account);
+                                  },
+                            activeColor: Colors.green.shade600,
+                            activeTrackColor: Colors.green.withValues(
+                              alpha: 0.2,
+                            ),
                           ),
                         ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- Middle Section: Account Number Box ---
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            account.bankName,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: titleColor,
-                            ),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? const Color(0xFF252945)
+                          : const Color(0xFFF8F9FF),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.credit_card_rounded,
+                          size: 18,
+                          color: theme.colorScheme.onSurface.withValues(
+                            alpha: 0.4,
                           ),
-                          const SizedBox(height: 2),
-
-                          Obx(() {
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Obx(() {
                             final encryptedKey = account.encryptedAccountNumber;
-
                             final isVisible =
                                 controller.accountVisibility[encryptedKey] ??
                                 false;
-
                             final isLoading = controller.isRevealing.contains(
                               encryptedKey,
                             );
 
-                            String displayText;
+                            String displayText = isVisible
+                                ? controller.revealedNumbers[encryptedKey] ??
+                                    '****'
+                                : controller.maskedDisplay(
+                                    account.lastFourDigits,
+                                  );
 
-                            if (isVisible) {
-                              displayText =
-                                  controller.revealedNumbers[encryptedKey] ??
-                                  '****';
-                            } else {
-                              displayText = controller.maskedDisplay(
-                                account.lastFourDigits,
-                              );
-                            }
-
-                            return Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    displayText,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: titleColor.withValues(alpha: 0.8),
-                                    ),
-                                  ),
-                                ),
-
-                                // 👁 Eye button
-                                isLoading
-                                    ? const SizedBox(
-                                        height: 18,
-                                        width: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : IconButton(
-                                        icon: Icon(
-                                          isVisible
-                                              ? Icons.visibility_off
-                                              : Icons.visibility,
-                                          size: 18,
-                                        ),
-                                        onPressed: () {
-                                          controller.toggleVisibility(
-                                            encryptedKey,
-                                          );
-                                        },
-                                      ),
-                              ],
+                            return Text(
+                              displayText,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.2,
+                                color: theme.colorScheme.onSurface,
+                              ),
                             );
                           }),
+                        ),
+                        Obx(() {
+                          final encryptedKey = account.encryptedAccountNumber;
+                          final isVisible =
+                              controller.accountVisibility[encryptedKey] ??
+                              false;
+                          final isLoading = controller.isRevealing.contains(
+                            encryptedKey,
+                          );
 
-                          const SizedBox(height: 2),
+                          return isLoading
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : GestureDetector(
+                                  onTap: () => controller.toggleVisibility(
+                                    encryptedKey,
+                                  ),
+                                  child: Icon(
+                                    isVisible
+                                        ? Icons.visibility_off_rounded
+                                        : Icons.visibility_rounded,
+                                    size: 20,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                );
+                        }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
 
-                          Text(
-                            account.accountType,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: subtitleColor,
+                  // --- Bottom Section: Balance and Actions ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Current Balance',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
+                                letterSpacing: 0.5,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(height: 4),
+                            Text(
+                              formatter.format(account.currentBalance),
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                                color: theme.colorScheme.onSurface,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              account.accountHolderName.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: theme.colorScheme.onSurface.withValues(
+                                  alpha: 0.3,
+                                ),
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    // Delete Button
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20),
-                      color: Colors.red.shade400,
-                      onPressed: () {
-                        DialogService.showDeleteDialog(
-                          onConfirm: () {
-                            controller.deleteBankAccount(
-                              encryptedAccountNumber:
-                                  account.encryptedAccountNumber,
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-
-              // --- BOTTOM HALF: Balance & Account Holder ---
-              Container(
-                color: bottomBgColor,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Row(
                         children: [
-                          Text(
-                            formatter.format(account.currentBalance),
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: balanceColor,
-                            ),
+                          // Edit Button
+                          _buildCardActionBtn(
+                            icon: Icons.edit_rounded,
+                            color: Colors.blue,
+                            onTap: () {
+                              controller.initForm(account);
+                              Get.toNamed(
+                                AppRoutes.addEditBankAccountScreen,
+                                arguments: {
+                                  "accountId": account.encryptedAccountNumber,
+                                },
+                              );
+                            },
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            account.accountHolderName,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: holderColor,
-                            ),
+                          const SizedBox(width: 10),
+                          // Delete Button
+                          _buildCardActionBtn(
+                            icon: Icons.delete_outline_rounded,
+                            color: Colors.redAccent,
+                            onTap: controller.isLoadingDelete.value
+                                ? () {}
+                                : () async {
+                                    final bool? confirmed =
+                                        await DialogService.showWarningDialog(
+                                      title: 'Permanently Delete?',
+                                      description:
+                                          'Delete ${account.bankName} and all its data?',
+                                      confirmText: 'Delete',
+                                      onConfirm: () => Get.back(result: true),
+                                    );
+
+                                    if (confirmed == true) {
+                                      controller.permanentlyDeleteAccount(
+                                        account,
+                                      );
+                                    }
+                                  },
                           ),
                         ],
                       ),
-                    ),
-                    // Visual cue that the card is editable
-                    IconButton(
-                      icon: const Icon(Icons.edit_note_sharp, size: 20),
-                      color: subtitleColor,
-                      onPressed: () {
-                        controller.initForm(account);
-                        Get.toNamed(
-                          AppRoutes.addEditBankAccountScreen,
-                          arguments: {
-                            "accountId": account.encryptedAccountNumber,
-                          },
-                        );
-                      },
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCardActionBtn({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color, size: 20),
       ),
     );
   }

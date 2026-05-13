@@ -54,6 +54,7 @@ class AddEditBankAccountScreen extends GetWidget<BankAccountController> {
                 theme: theme,
                 isDark: isDark,
                 hintText: 'Enter account number',
+                enabled: !isEditing,
                 icon: Icons.numbers,
                 validator: (val) => val!.isEmpty ? "Required field" : null,
               ),
@@ -89,9 +90,10 @@ class AddEditBankAccountScreen extends GetWidget<BankAccountController> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildInputLabel(theme, "Initial Balance"),
+                        _buildInputLabel(theme, "Balance"),
                         _buildTextField(
                           controller: controller.balanceCtrl,
+                          enabled: !isEditing,
                           theme: theme,
                           isDark: isDark,
                           hintText: '0.00',
@@ -118,10 +120,11 @@ class AddEditBankAccountScreen extends GetWidget<BankAccountController> {
                 child: ElevatedButton(
                   onPressed: () async {
                     if (controller.formKey.currentState?.validate() == true) {
-                      final bool? isConfirmed = await DialogService.showConfirmDialog(
+                      final bool?
+                      isConfirmed = await DialogService.showConfirmDialog(
                         title: isEditing ? "Confirm Update" : "Confirm Save",
-                        description: isEditing 
-                            ? "Are you sure you want to update this account?" 
+                        description: isEditing
+                            ? "Are you sure you want to update this account?"
                             : "Are you sure you want to save this account?",
                         confirmText: 'Confirm',
                       );
@@ -178,10 +181,12 @@ class AddEditBankAccountScreen extends GetWidget<BankAccountController> {
     required bool isDark,
     required String hintText,
     required IconData icon,
+    bool enabled = true,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
+      enabled: enabled,
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,

@@ -24,6 +24,7 @@ const String ACCOUNT_TYPE = "account_type"; // saving, current
 const String CURRENT_BALANCE = "current_balance";
 const String DATE_ADDED = "date_added";
 const String LAST_FOUR_DIGITS = "last_four_digits";
+const String IS_ACTIVE = "is_active";
 
 // ---------- cash wallet ---------- //
 const String TABLE_CASH_WALLET = "cash_wallet";

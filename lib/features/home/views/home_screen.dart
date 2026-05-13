@@ -743,15 +743,61 @@ class HomeScreen extends GetWidget<HomeController> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  acc.bankName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: theme.colorScheme.onSurface,
-                                  ),
+                                Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        acc.bankName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: acc.isActive
+                                            ? Colors.green.withValues(
+                                                alpha: 0.1,
+                                              )
+                                            : Colors.grey.withValues(
+                                                alpha: 0.1,
+                                              ),
+                                        borderRadius:
+                                            BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: acc.isActive
+                                              ? Colors.green.withValues(
+                                                  alpha: 0.3,
+                                                )
+                                              : Colors.grey.withValues(
+                                                  alpha: 0.3,
+                                                ),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        acc.isActive ? 'Active' : 'Inactive',
+                                        style: TextStyle(
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                          color: acc.isActive
+                                              ? Colors.green.shade700
+                                              : Colors.grey.shade700,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 2),
                                 Obx(() {
