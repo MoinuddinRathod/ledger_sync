@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:csv/csv.dart';
 import 'package:excel/excel.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../models/parsed_transaction_model.dart';
 import 'bank_statement_parser.dart';
@@ -63,7 +64,8 @@ class SbiParser extends BankStatementParser {
       if (stringRows.isEmpty) return const ParseResult(isEmpty: true);
 
       return _processStringRows(stringRows);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       return ParseResult(errorMessage: 'Error parsing Excel file: $e');
     }
   }
@@ -91,7 +93,8 @@ class SbiParser extends BankStatementParser {
           .toList();
 
       return _processStringRows(stringRows);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       return ParseResult(errorMessage: 'Error parsing CSV file');
     }
   }

@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'package:encrypt/encrypt.dart' as encrypt_pkg;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:crypto/crypto.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 class EncryptionService {
   EncryptionService._privateConstructor();
-  static final EncryptionService instance = EncryptionService._privateConstructor();
+  static final EncryptionService instance =
+      EncryptionService._privateConstructor();
 
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   encrypt_pkg.Key? _encryptionKey;
@@ -24,7 +26,8 @@ class EncryptionService {
 
   String encrypt(String plainText) {
     if (plainText.isEmpty) return '';
-    if (_encryptionKey == null) throw Exception("EncryptionService not initialized");
+    if (_encryptionKey == null)
+      throw Exception("EncryptionService not initialized");
 
     final encrypter = encrypt_pkg.Encrypter(encrypt_pkg.AES(_encryptionKey!));
     final encrypted = encrypter.encrypt(plainText, iv: _iv);
@@ -33,13 +36,15 @@ class EncryptionService {
 
   String decrypt(String encryptedText) {
     if (encryptedText.isEmpty) return '';
-    if (_encryptionKey == null) throw Exception("EncryptionService not initialized");
+    if (_encryptionKey == null)
+      throw Exception("EncryptionService not initialized");
 
     try {
       final encrypter = encrypt_pkg.Encrypter(encrypt_pkg.AES(_encryptionKey!));
       final decrypted = encrypter.decrypt64(encryptedText, iv: _iv);
       return decrypted;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       // If decryption fails (e.g. data is unencrypted during migration),
       // return the raw text to gracefully fallback
       return encryptedText;

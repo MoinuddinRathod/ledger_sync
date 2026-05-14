@@ -1,6 +1,7 @@
 // MODIFIED: Service for handling manual transaction creation with Cash tag dual-effect (Feature A)
 import 'dart:developer';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'local_db_service/local_db_service.dart';
 import 'local_storage_service.dart';
 import 'cash_tag_service.dart';
@@ -72,7 +73,8 @@ class ManualTransactionService {
 
       log('[ManualTransactionService] Manual transaction created successfully');
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[ManualTransactionService] createManualTransaction error: $e');
       return false;
     }

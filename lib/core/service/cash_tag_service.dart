@@ -1,6 +1,7 @@
 // MODIFIED: New service for managing the global Cash tag (Feature A)
 import 'dart:developer';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:sqflite/sqflite.dart';
 import 'local_db_service/local_db_service.dart';
 import 'local_storage_service.dart';
@@ -127,7 +128,8 @@ class CashTagService extends GetxService {
           UPDATED_AT: now,
           DELETED_AT: null,
         }, executor: executor);
-      } catch (e) {
+      } catch (e, stackTrace) {
+        Sentry.captureException(e, stackTrace: stackTrace);
         log('[CashTagService] Failed to insert cash wallet transaction: $e');
         return false;
       }
@@ -138,7 +140,8 @@ class CashTagService extends GetxService {
         'new balance: $newCashBalance',
       );
       return true;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[CashTagService] applyDualEffect error: $e');
       return false;
     }

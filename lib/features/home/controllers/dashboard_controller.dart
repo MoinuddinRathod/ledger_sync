@@ -2,6 +2,7 @@ import 'dart:developer';
 
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:sentry/sentry.dart';
 
 import '../../../core/service/local_db_service/local_db_service.dart';
 import '../../../core/service/local_storage_service.dart';
@@ -111,7 +112,9 @@ class DashboardController extends GetxController {
       ]);
 
       if (Get.isRegistered<BankAccountController>()) {
-        Get.find<BankAccountController>().fetchBankAccounts(accountId: accountId);
+        Get.find<BankAccountController>().fetchBankAccounts(
+          accountId: accountId,
+        );
       }
       if (Get.isRegistered<CashWalletController>()) {
         Get.find<CashWalletController>().fetchData();
@@ -119,7 +122,10 @@ class DashboardController extends GetxController {
 
       lastUpdated.value = DateFormat('hh:mm a').format(DateTime.now());
     } catch (e, stack) {
-      log('[DashboardController] refreshDashboard error: $e', stackTrace: stack);
+      log(
+        '[DashboardController] refreshDashboard error: $e',
+        stackTrace: stack,
+      );
     } finally {
       isLoading.value = false;
     }
@@ -130,12 +136,11 @@ class DashboardController extends GetxController {
   Future<void> _loadBalances(int accountId) async {
     try {
       final result = await _db.getDashboardBalances(accountId);
-      bankBalance.value =
-          (result['bank_total'] as num?)?.toDouble() ?? 0.0;
-      cashBalance.value =
-          (result['cash_total'] as num?)?.toDouble() ?? 0.0;
+      bankBalance.value = (result['bank_total'] as num?)?.toDouble() ?? 0.0;
+      cashBalance.value = (result['cash_total'] as num?)?.toDouble() ?? 0.0;
       totalBalance.value = bankBalance.value + cashBalance.value;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[DashboardController] _loadBalances error: $e');
       bankBalance.value = 0.0;
       cashBalance.value = 0.0;
@@ -146,11 +151,11 @@ class DashboardController extends GetxController {
   Future<void> _loadIncomeExpense(int accountId) async {
     try {
       final result = await _db.getDashboardIncomeExpense(accountId);
-      totalIncome.value =
-          (result['total_income'] as num?)?.toDouble() ?? 0.0;
+      totalIncome.value = (result['total_income'] as num?)?.toDouble() ?? 0.0;
       totalExpenses.value =
           (result['total_expense'] as num?)?.toDouble() ?? 0.0;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[DashboardController] _loadIncomeExpense error: $e');
       totalIncome.value = 0.0;
       totalExpenses.value = 0.0;
@@ -162,7 +167,8 @@ class DashboardController extends GetxController {
       final result = await _db.getVirtualEntrySummary(accountId);
       totalReceivable.value = result['receivable'] ?? 0.0;
       totalPayable.value = result['payable'] ?? 0.0;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[DashboardController] _loadVirtualEntrySummary error: $e');
       totalReceivable.value = 0.0;
       totalPayable.value = 0.0;
@@ -171,11 +177,10 @@ class DashboardController extends GetxController {
 
   Future<void> _loadRecentTransactions(int accountId) async {
     try {
-      final rows =
-          await _db.getRecentTransactions(accountId, limit: 5);
-      recentTransactions.value =
-          rows.map(DashboardRecentTx.fromMap).toList();
-    } catch (e) {
+      final rows = await _db.getRecentTransactions(accountId, limit: 5);
+      recentTransactions.value = rows.map(DashboardRecentTx.fromMap).toList();
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[DashboardController] _loadRecentTransactions error: $e');
       recentTransactions.clear();
     }

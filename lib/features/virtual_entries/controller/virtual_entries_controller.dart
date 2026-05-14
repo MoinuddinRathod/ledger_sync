@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../core/service/snackbar_service.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/local_db_service/local_db_service.dart';
@@ -62,7 +63,8 @@ class VirtualEntriesController extends GetxController {
           .toList();
 
       _calculateTotals();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint("Error fetching virtual entries: $e");
     } finally {
       isLoading.value = false;
@@ -163,7 +165,8 @@ class VirtualEntriesController extends GetxController {
           message: isEditing ? 'Entry updated.' : 'Entry saved.',
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint("Virtual Entries error: $e");
     } finally {
       isLoading.value = false;
@@ -186,7 +189,8 @@ class VirtualEntriesController extends GetxController {
           message: 'Entry removed successfully.',
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint("Error deleting Entry: $e");
     } finally {
       isLoading.value = false;
@@ -378,7 +382,8 @@ class VirtualEntriesController extends GetxController {
       log(
         '[VirtualEntriesController] runAutoMatching: Completed - found ${matches.length} total matches',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[VirtualEntriesController] runAutoMatching error: $e');
     }
   }
@@ -432,7 +437,8 @@ class VirtualEntriesController extends GetxController {
       ''';
 
       return await db.rawQuery(query, args);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[VirtualEntriesController] _getCandidateTransactions error: $e');
       return [];
     }
@@ -463,7 +469,8 @@ class VirtualEntriesController extends GetxController {
 
         SnackbarService.showSuccess(title: 'Resolved', message: message);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[VirtualEntriesController] markAsResolved error: $e');
       SnackbarService.showError(
         title: 'Error',
@@ -612,7 +619,8 @@ class VirtualEntriesController extends GetxController {
       log(
         '[VirtualEntriesController] runCashWalletMatching: Completed - found ${matches.length} total matches',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[VirtualEntriesController] runCashWalletMatching error: $e');
     }
   }
@@ -836,7 +844,8 @@ class VirtualEntriesController extends GetxController {
         '[VirtualEntriesController] runFullMatching: '
         'completed with ${newMatches.length} matches',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('[VirtualEntriesController] runFullMatching error: $e');
     }
   }
@@ -845,6 +854,8 @@ class VirtualEntriesController extends GetxController {
   void _refreshDashboard() {
     try {
       Get.find<DashboardController>().refreshDashboard();
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
   }
 }

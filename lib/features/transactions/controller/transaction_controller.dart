@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
@@ -85,10 +86,11 @@ class TransactionsController extends GetxController {
       _applyFilters();
 
       log('[TransactionsController] fetched ${data.length} transactions');
-    } catch (e, stack) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(
         '[TransactionsController] fetchTransactions error: $e',
-        stackTrace: stack,
+        stackTrace: stackTrace,
       );
       SnackbarService.showError(
         title: 'Load Failed',
@@ -127,10 +129,11 @@ class TransactionsController extends GetxController {
         message: 'Transaction removed.',
       );
       await fetchTransactions();
-    } catch (e, stack) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(
         '[TransactionsController] deleteTransaction error: $e',
-        stackTrace: stack,
+        stackTrace: stackTrace,
       );
       SnackbarService.showError(
         title: 'Delete Failed',
@@ -276,13 +279,19 @@ class TransactionsController extends GetxController {
     try {
       // Try ISO first (most common)
       return DateTime.parse(raw);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
     try {
       return DateFormat('dd/MM/yyyy').parse(raw);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
     try {
       return DateFormat('MM/dd/yyyy').parse(raw);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
     return null;
   }
 

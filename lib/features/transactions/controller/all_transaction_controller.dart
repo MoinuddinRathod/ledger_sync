@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
@@ -28,7 +29,8 @@ class AllTransactionsController extends GetxController {
   final RxString searchQuery = ''.obs;
 
   // ── Filter ─────────────────────────────────────────
-  final List<String> filters = ['All', 'Credit', 'Debit'];
+  /// 'Transfer' is the new filter for internal transfers only.
+  final List<String> filters = ['All', 'Credit', 'Debit', 'Transfer'];
   final RxString selectedFilter = 'All'.obs;
 
   // ── Sort ───────────────────────────────────────────
@@ -64,14 +66,63 @@ class AllTransactionsController extends GetxController {
       final bankData = await _repo.getByAccountId(accountId);
       final cashData = await _cashRepo.getCashWalletTransactions(accountId);
 
-      final merged = [
-        ...bankData,
-        ...cashData.map((e) => BankTransactionModel.fromCashWallet(e)),
-      ];
+      // Convert cash wallet entries into BankTransactionModel instances.
+      // Transfer types (Cash Withdrawn/Deposited) already have isInternalTransfer=true
+      // and txnRef = bankAccountId set in fromCashWallet factory.
+      final cashModels = cashData
+          .map((e) => BankTransactionModel.fromCashWallet(e))
+          .toList();
+
+      // Build a lookup: bankAccountEncryptedId → cash transfer model.
+      // Used to derive the human-readable direction label on the bank-side row.
+      final Map<String, BankTransactionModel> cashTransferByBankId = {};
+      for (final c in cashModels) {
+        if (c.isInternalTransfer && c.txnRef != null) {
+          cashTransferByBankId[c.txnRef!] = c;
+        }
+      }
+
+      // Process bank rows:
+      //  - Rows with TRF_* txnRef are the bank leg of a Cash↔Bank transfer.
+      //    Annotate them with isInternalTransfer=true and a transferLabel.
+      //  - All other rows pass through unchanged.
+      final processedBank = bankData.map((txn) {
+        if (txn.hasTrfRef) {
+          // Derive direction from the paired cash entry (if available).
+          final cashLeg = cashTransferByBankId[txn.encryptedAccountId];
+          String transferLabel;
+          if (cashLeg != null) {
+            final cashType = cashLeg.txnRef != null
+                ? 'Cash Wallet'
+                : 'Cash Wallet';
+            final isCashToBank =
+                txn.txnType.toUpperCase() == 'CR'; // bank received money
+            transferLabel = isCashToBank
+                ? 'Cash Wallet → ${txn.maskedAccountLabel}'
+                : '${txn.maskedAccountLabel} → Cash Wallet';
+          } else {
+            transferLabel = 'Internal Transfer · ${txn.maskedAccountLabel}';
+          }
+          return txn.copyWith(
+            isInternalTransfer: true,
+            transferLabel: transferLabel,
+          );
+        }
+        return txn;
+      }).toList();
+
+      // Only include non-transfer cash entries in the merged list.
+      // Transfer cash entries are already represented through the bank-side row.
+      final nonTransferCash = cashModels
+          .where((c) => !c.isInternalTransfer)
+          .toList();
+
+      final merged = [...processedBank, ...nonTransferCash];
 
       _allTransactions.assignAll(merged);
       _applyFilters();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       SnackbarService.showError(
         title: 'Error',
         message: 'Failed to load transactions',
@@ -102,7 +153,8 @@ class AllTransactionsController extends GetxController {
         await fetchAllTransactions(); // refresh
         _refreshDashboard();
       }
-    } catch (_) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       SnackbarService.showError(
         title: 'Delete Failed',
         message: 'Unable to delete transaction',
@@ -171,9 +223,13 @@ class AllTransactionsController extends GetxController {
 
     // 1. Filter by type
     if (selectedFilter.value == 'Credit') {
-      result = result.where((e) => e.isCredit).toList();
+      result = result
+          .where((e) => e.isCredit && !e.isInternalTransfer)
+          .toList();
     } else if (selectedFilter.value == 'Debit') {
-      result = result.where((e) => e.isDebit).toList();
+      result = result.where((e) => e.isDebit && !e.isInternalTransfer).toList();
+    } else if (selectedFilter.value == 'Transfer') {
+      result = result.where((e) => e.isInternalTransfer).toList();
     }
 
     // 2. Filter by date range
@@ -186,13 +242,14 @@ class AllTransactionsController extends GetxController {
       }).toList();
     }
 
-    // 3. Search (narration, tag name, or bank name)
+    // 3. Search (narration, tag name, bank name, or transfer label)
     if (searchQuery.value.isNotEmpty) {
       final q = searchQuery.value.toLowerCase();
       result = result.where((t) {
         return t.txnNarration.toLowerCase().contains(q) ||
             t.resolvedTagName.toLowerCase().contains(q) ||
-            (t.bankName?.toLowerCase().contains(q) ?? false);
+            (t.bankName?.toLowerCase().contains(q) ?? false) ||
+            (t.transferLabel?.toLowerCase().contains(q) ?? false);
       }).toList();
     }
 
@@ -225,13 +282,19 @@ class AllTransactionsController extends GetxController {
     try {
       // Try ISO first (most common)
       return DateTime.parse(raw);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
     try {
       return DateFormat('dd/MM/yyyy').parse(raw);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
     try {
       return DateFormat('MM/dd/yyyy').parse(raw);
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
     return null;
   }
 
@@ -243,20 +306,27 @@ class AllTransactionsController extends GetxController {
   }
 
   // ─────────────────────────────────────────────
-  // Summary
+  // Summary — internal transfers are EXCLUDED from CR/DR totals
   // ─────────────────────────────────────────────
 
   double get totalCredit => _allTransactions
-      .where((e) => e.isCredit)
+      .where((e) => e.isCredit && !e.isInternalTransfer)
       .fold(0.0, (s, e) => s + e.txnAmount);
 
   double get totalDebit => _allTransactions
-      .where((e) => e.isDebit)
+      .where((e) => e.isDebit && !e.isInternalTransfer)
+      .fold(0.0, (s, e) => s + e.txnAmount);
+
+  /// Total amount moved via internal transfers (for display in Transfer filter view).
+  double get totalTransfers => _allTransactions
+      .where((e) => e.isInternalTransfer)
       .fold(0.0, (s, e) => s + e.txnAmount);
 
   void _refreshDashboard() {
     try {
       Get.find<DashboardController>().refreshDashboard();
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
   }
 }

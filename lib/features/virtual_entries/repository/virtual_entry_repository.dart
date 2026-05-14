@@ -1,4 +1,6 @@
 import 'dart:developer';
+import 'package:sentry_flutter/sentry_flutter.dart';
+
 import '../../../core/service/local_db_service/local_db_service.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
@@ -20,7 +22,8 @@ class VirtualEntryRepository {
       final List<Map<String, dynamic>> maps = await _dbService
           .getVirtualEntries(accountId);
       return maps.map((e) => VirtualEntryModel.fromMap(e)).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('Error getting virtual entries: $e');
       SnackbarService.showError(
         title: 'Database Error',
@@ -43,7 +46,8 @@ class VirtualEntryRepository {
 
       final id = await _dbService.insertVirtualEntry(data);
       return id > 0;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('Error inserting virtual entry: $e');
       SnackbarService.showError(
         title: 'Database Error',
@@ -66,7 +70,8 @@ class VirtualEntryRepository {
         _masterAccountId,
       );
       return result > 0;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('Error updating virtual entry: $e');
       SnackbarService.showError(
         title: 'Database Error',
@@ -83,7 +88,8 @@ class VirtualEntryRepository {
         _masterAccountId,
       );
       return result > 0;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('Error deleting virtual entry: $e');
       SnackbarService.showError(
         title: 'Database Error',

@@ -464,6 +464,12 @@ class AllTransactionsScreen extends GetWidget<AllTransactionsController> {
     required Key dismissKey,
     required VoidCallback onDelete,
   }) {
+    // ── Internal Transfer tile ─────────────────────────────────────────────
+    if (txn.isInternalTransfer) {
+      return _buildTransferTile(txn: txn, colorScheme: colorScheme);
+    }
+
+    // ── Regular Credit / Debit tile ────────────────────────────────────────
     final isDark = colorScheme.brightness == Brightness.dark;
     final isCredit = txn.isCredit;
     final color = isCredit ? Colors.green : colorScheme.error;
@@ -630,6 +636,117 @@ class AllTransactionsScreen extends GetWidget<AllTransactionsController> {
           : tileContent,
     );
   }
+
+  /// Distinct tile style for internal transfers (Cash↔Bank, Bank↔Bank).
+  /// Uses a neutral swap icon and amber/blue color — NOT red or green —
+  /// to communicate that net worth is unchanged.
+  Widget _buildTransferTile({
+    required BankTransactionModel txn,
+    required ColorScheme colorScheme,
+  }) {
+    final isDark = colorScheme.brightness == Brightness.dark;
+    const transferColor = Color(0xFF7C83FD); // soft indigo
+    final formattedAmount = _inrFormatter.format(txn.txnAmount);
+    final formattedDate = controller.formatDisplayDate(txn.txnDate);
+    final label = txn.transferLabel ?? 'Internal Transfer';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A1C35) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark
+                ? transferColor.withValues(alpha: 0.25)
+                : transferColor.withValues(alpha: 0.2),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Swap icon with soft indigo background
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: transferColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.swap_horiz_rounded,
+                color: transferColor,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            // Transfer label + date
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: transferColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'Transfer',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: transferColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        formattedDate,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Amount (neutral color, no +/- prefix)
+            Text(
+              formattedAmount,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: transferColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildFab(BuildContext context, ColorScheme colorScheme) {
     return FloatingActionButton.extended(

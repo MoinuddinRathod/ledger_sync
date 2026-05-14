@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../core/service/snackbar_service.dart';
 import '../models/parsed_transaction_model.dart';
 import '../parsers/bank_statement_parser.dart';
@@ -78,7 +79,8 @@ class UploadFileController extends GetxController {
           }
         }
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       SnackbarService.showError(title: 'Error', message: "Failed to pick file");
     }
   }
@@ -228,7 +230,8 @@ class UploadFileController extends GetxController {
           'parseResult': result,
         },
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       Get.closeAllSnackbars();
 
       if (Get.isDialogOpen ?? false) Get.back(); // Close loading dialog

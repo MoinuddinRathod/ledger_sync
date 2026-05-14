@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../core/service/local_db_service/local_db_service.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
@@ -132,7 +133,8 @@ class MasterAccountController extends GetxController {
             debugPrint("Cash tag created successfully with ID: $cashTagId");
           }
         });
-      } catch (e) {
+      } catch (e, stackTrace) {
+        Sentry.captureException(e, stackTrace: stackTrace);
         debugPrint("Error creating cash wallet: $e");
       }
 
@@ -277,6 +279,7 @@ class MasterAccountController extends GetxController {
         }
       }
     } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint("Error in checkSession: $e\n$stackTrace");
       // Fallback in case of error
       Get.offAllNamed(AppRoutes.masterAccountSetupScreen);

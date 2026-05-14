@@ -625,7 +625,7 @@ class MappableTransaction {
   final bool isAutoMatched;
   final String? matchedKeyword;
 
-  /// ✅ TAG STATE
+  ///  TAG STATE
   final int? tagId;
   final String? tagName;
 

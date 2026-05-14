@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'dart:convert';
 import 'package:path/path.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:crypto/crypto.dart';
 
@@ -185,7 +186,8 @@ class DatabaseHelper {
     try {
       final db = await instance.database;
       return await db.insert(TABLE_ACCOUNTS, account.toMap());
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return -1;
     }
@@ -201,7 +203,8 @@ class DatabaseHelper {
         whereArgs: [accountName, pin],
       );
       return maps.isNotEmpty ? maps.first[ACCOUNT_ID] : -1;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return -1;
     }
@@ -215,7 +218,8 @@ class DatabaseHelper {
       return List.generate(maps.length, (i) {
         return AccountModel.fromMap(maps[i]);
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return [];
     }
@@ -524,7 +528,8 @@ class DatabaseHelper {
     try {
       final db = await instance.database;
       return await db.insert(TABLE_TAGS, model.toMap());
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return -1;
     }
@@ -553,7 +558,8 @@ class DatabaseHelper {
         "here is all tags presents : : : : ::  :: :: : : : : ${result.toList()}",
       );
       return result.map((e) => TagModel.fromMap(e)).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return [];
     }
@@ -579,7 +585,8 @@ class DatabaseHelper {
         [userId],
       );
       return result.map((e) => TagModel.fromMap(e)).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return [];
     }
@@ -610,7 +617,8 @@ class DatabaseHelper {
         [bankAccountId, userId],
       );
       return result.map((e) => TagModel.fromMap(e)).toList();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return [];
     }
@@ -627,7 +635,8 @@ class DatabaseHelper {
         where: "$TAG_ID = ? AND $TAG_USER_ID = ?",
         whereArgs: [model.tagId, userId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return -1;
     }
@@ -644,7 +653,8 @@ class DatabaseHelper {
         where: "$TAG_ID = ? AND $TAG_USER_ID = ?",
         whereArgs: [tagId, userId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return -1;
     }
@@ -700,7 +710,8 @@ class DatabaseHelper {
         ''',
         [encryptedAccountNumber, masterAccountId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getTransactionsByAccount error: $e');
       return [];
     }
@@ -749,7 +760,8 @@ class DatabaseHelper {
         ''',
         [tagId, masterAccountId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getTransactionsByTagId error: $e');
       return [];
     }
@@ -784,7 +796,8 @@ class DatabaseHelper {
         if (tagId != null) result[tagId] = count;
       }
       return result;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getTagTransactionCounts error: $e');
       return {};
     }
@@ -802,7 +815,8 @@ class DatabaseHelper {
             '$TXN_ID = ? AND $TXN_ACCOUNT_ID IN (SELECT $BANK_ACCOUNT_NUMBER FROM $TABLE_BANK_ACCOUNTS WHERE $ACCOUNT_ID = ? AND $DELETED_AT IS NULL)',
         whereArgs: [txnId, masterAccountId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('softDeleteTransaction error: $e');
       return -1;
     }
@@ -817,7 +831,8 @@ class DatabaseHelper {
     try {
       final db = executor ?? await instance.database;
       return await db.insert(TABLE_TRANSACTIONS, data);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log("insertTransaction error: $e");
       return -1;
     }
@@ -863,7 +878,8 @@ class DatabaseHelper {
         'cash_total': cashTotal,
         'combined_total': bankTotal + cashTotal,
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return {'bank_total': 0.0, 'cash_total': 0.0, 'combined_total': 0.0};
     }
@@ -886,7 +902,7 @@ class DatabaseHelper {
           ? [accountId, monthYear]
           : [accountId];
 
-      // Bank transactions income (CR)
+      // Bank transactions income (CR) — EXCLUDE internal transfers
       final bankIncomeResult = await db.rawQuery('''
       SELECT COALESCE(SUM($TXN_AMOUNT), 0.0) as total
       FROM $TABLE_TRANSACTIONS
@@ -895,11 +911,12 @@ class DatabaseHelper {
         WHERE $ACCOUNT_ID = ? AND $DELETED_AT IS NULL
       )
       AND UPPER($TXN_TYPE) = 'CR'
+      AND ($TXN_REF IS NULL OR $TXN_REF NOT LIKE 'TRF_%')
       AND $DELETED_AT IS NULL
       $dateFilter
     ''', bankArgs);
 
-      // Bank transactions expense (DR)
+      // Bank transactions expense (DR) — EXCLUDE internal transfers
       final bankExpenseResult = await db.rawQuery('''
       SELECT COALESCE(SUM($TXN_AMOUNT), 0.0) as total
       FROM $TABLE_TRANSACTIONS
@@ -908,6 +925,7 @@ class DatabaseHelper {
         WHERE $ACCOUNT_ID = ? AND $DELETED_AT IS NULL
       )
       AND UPPER($TXN_TYPE) = 'DR'
+      AND ($TXN_REF IS NULL OR $TXN_REF NOT LIKE 'TRF_%')
       AND $DELETED_AT IS NULL
       $dateFilter
     ''', bankArgs);
@@ -919,22 +937,22 @@ class DatabaseHelper {
           ? [accountId, monthYear]
           : [accountId];
 
-      // Cash wallet income (Income + Cash Withdrawn From Bank = money coming into wallet)
+      // Cash wallet income — ONLY 'Income' (transfers excluded)
       final cashIncomeResult = await db.rawQuery('''
       SELECT COALESCE(SUM(ABS($AMOUNT)), 0.0) as total
       FROM $TABLE_CASH_WALLET_TRANSACTIONS
       WHERE $ACCOUNT_ID = ?
-      AND $CASH_WALLET_TRANSACTION_TYPE IN ('Income', 'Cash Withdrawn From Bank')
+      AND $CASH_WALLET_TRANSACTION_TYPE IN ('Income')
       AND $DELETED_AT IS NULL
       $cashDateFilter
     ''', cashArgs);
 
-      // Cash wallet expense (Expense + Cash Deposited To Bank = money going out of wallet)
+      // Cash wallet expense — ONLY 'Expense' (transfers excluded)
       final cashExpenseResult = await db.rawQuery('''
       SELECT COALESCE(SUM(ABS($AMOUNT)), 0.0) as total
       FROM $TABLE_CASH_WALLET_TRANSACTIONS
       WHERE $ACCOUNT_ID = ?
-      AND $CASH_WALLET_TRANSACTION_TYPE IN ('Expense', 'Cash Deposited To Bank')
+      AND $CASH_WALLET_TRANSACTION_TYPE IN ('Expense')
       AND $DELETED_AT IS NULL
       $cashDateFilter
     ''', cashArgs);
@@ -952,7 +970,8 @@ class DatabaseHelper {
         'cash_income': cashIncome,
         'cash_expense': cashExpense,
       };
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log(e.toString());
       return {
         'total_income': 0.0,
@@ -1005,7 +1024,8 @@ class DatabaseHelper {
         ''',
         [accountId, limit],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getRecentTransactions error: $e');
       return [];
     }
@@ -1040,7 +1060,8 @@ class DatabaseHelper {
         if (type == 'Payable') payable = total;
       }
       return {'receivable': receivable, 'payable': payable};
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getVirtualEntrySummary error: $e');
       return {'receivable': 0.0, 'payable': 0.0};
     }
@@ -1105,7 +1126,8 @@ class DatabaseHelper {
 
       log('Cash tag created with ID: $tagId');
       return tagId;
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('ensureCashTagExists error: $e');
       return -1;
     }
@@ -1133,7 +1155,8 @@ class DatabaseHelper {
         ORDER BY ve.$VE_CREATED_AT DESC
       ''';
       return await db.rawQuery(query, [accountId]);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getPendingVirtualEntries error: $e');
       return [];
     }
@@ -1158,7 +1181,8 @@ class DatabaseHelper {
         where: '$VIRTUAL_ENTRY_ID = ? AND $VE_ACCOUNT_ID = ?',
         whereArgs: [virtualEntryId, accountId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('markVirtualEntryResolved error: $e');
       return -1;
     }
@@ -1193,7 +1217,8 @@ class DatabaseHelper {
     ''';
 
       return await db.rawQuery(query, [accountId]);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getCashWalletTransactionsForMatching error: $e');
       return [];
     }
@@ -1237,7 +1262,8 @@ class DatabaseHelper {
         ''',
         [accountId],
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       log('getRecentTransactions error: $e');
       return [];
     }

@@ -1,8 +1,12 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
 import '../../../core/service/dialog_service.dart';
+import '../../../core/service/local_db_service/local_db_service.dart';
+import '../../../core/utils/app_constants.dart';
 import '../../bank_account/controllers/bank_account_controller.dart';
 import '../../bank_account/models/bank_account_model.dart';
 import '../../bank_account/repository/bank_account_repository.dart';
@@ -77,7 +81,8 @@ class CashWalletController extends GetxController {
       bankAccounts.value = await _bankRepository.getAllBankAccounts(
         accountId: accountId,
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint("Error fetching cash wallet data: $e");
     } finally {
       isLoading.value = false;
@@ -176,8 +181,31 @@ class CashWalletController extends GetxController {
 
       if (selectedTransactionType.value == 'Cash Withdrawn From Bank') {
         await _updateBankBalance(amount, true); // bank goes DOWN
+        // Create the matching bank-side DR entry tagged as an internal transfer
+        final transferRef = _generateTransferRef();
+        await _insertBankTransferEntry(
+          bankAccount: selectedBankAccount.value!,
+          amount: amount,
+          txnType: 'DR',
+          narration: 'Transfer to Cash Wallet - ${noteController.text.trim()}',
+          transferRef: transferRef,
+          txnDate: selectedDate.value.toIso8601String(),
+          tagId: selectedTag.value!.tagId!,
+        );
       } else if (selectedTransactionType.value == 'Cash Deposited To Bank') {
         await _updateBankBalance(amount, false); // bank goes UP
+        // Create the matching bank-side CR entry tagged as an internal transfer
+        final transferRef = _generateTransferRef();
+        await _insertBankTransferEntry(
+          bankAccount: selectedBankAccount.value!,
+          amount: amount,
+          txnType: 'CR',
+          narration:
+              'Transfer from Cash Wallet - ${noteController.text.trim()}',
+          transferRef: transferRef,
+          txnDate: selectedDate.value.toIso8601String(),
+          tagId: selectedTag.value!.tagId!,
+        );
       }
 
       // Fetch new data
@@ -194,7 +222,8 @@ class CashWalletController extends GetxController {
 
       // Reset form
       resetForm();
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint(e.toString());
       SnackbarService.showError(
         title: 'Error',
@@ -367,7 +396,8 @@ class CashWalletController extends GetxController {
           message: 'Transaction updated successfully',
         );
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint(e.toString());
       SnackbarService.showError(
         title: 'Error',
@@ -458,7 +488,8 @@ class CashWalletController extends GetxController {
         title: 'Deleted',
         message: 'Transaction removed successfully',
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
       debugPrint(e.toString());
       SnackbarService.showError(
         title: 'Error',
@@ -473,13 +504,17 @@ class CashWalletController extends GetxController {
   void _refreshDashboard() {
     try {
       Get.find<DashboardController>().refreshDashboard();
-    } catch (_) {} // DashboardController may not be mounted in certain flows
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    } // DashboardController may not be mounted in certain flows
   }
 
   void _refreshAllTransactions() {
     try {
       Get.find<AllTransactionsController>().fetchAllTransactions();
-    } catch (_) {}
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+    }
   }
 
   /// Updates the selected bank account's balance when cash moves to/from bank.
@@ -499,11 +534,52 @@ class CashWalletController extends GetxController {
     final updatedBank = bank.copyWith(currentBalance: newBankBalance);
     await _bankRepository.updateBankAccount(
       updatedBank,
-      bank.encryptedAccountNumber, // pass the existing encrypted number as the "old" key
+      bank.encryptedAccountNumber,
     );
     Get.find<BankAccountController>().fetchBankAccounts(
       accountId: LocalStorageService.instance.accountId,
     );
+  }
+
+  /// Generates a unique transfer reference in the format 'TRF_<ms>_<4hex>'.
+  /// This prefix is used across the codebase to identify internal transfers.
+  String _generateTransferRef() {
+    final ms = DateTime.now().millisecondsSinceEpoch;
+    final rand = Random().nextInt(0xFFFF).toRadixString(16).padLeft(4, '0');
+    return 'TRF_${ms}_$rand';
+  }
+
+  /// Inserts the bank-side leg of a Cash↔Bank internal transfer.
+  /// The [transferRef] must start with 'TRF_' so that queries and the
+  /// AllTransactionsController can identify and group the paired entries.
+  Future<void> _insertBankTransferEntry({
+    required BankAccountModel bankAccount,
+    required double amount,
+    required String txnType,
+    required String narration,
+    required String transferRef,
+    required String txnDate,
+    required int tagId,
+  }) async {
+    try {
+      final now = DateTime.now().toIso8601String();
+      await DatabaseHelper.instance.insertTransaction({
+        TXN_DATE: txnDate,
+        TXN_ACCOUNT_ID: bankAccount.encryptedAccountNumber,
+        TXN_TAG_ID: tagId,
+        TXN_AMOUNT: amount,
+        TXN_NARRATION: narration,
+        TXN_TYPE: txnType.toUpperCase(),
+        TXN_REF: transferRef,
+        TXN_IS_MANUAL: 1,
+        CREATED_AT: now,
+        UPDATED_AT: now,
+        DELETED_AT: null,
+      });
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+      debugPrint('[CashWalletController] _insertBankTransferEntry error: $e');
+    }
   }
 
   Future<bool> _validateAndShowDialog(double balance, double amount) async {

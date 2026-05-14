@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
 import '../../bank_account/controllers/bank_account_controller.dart';
@@ -380,6 +381,7 @@ class TagsController extends GetxController {
 
       clearCreateTagState();
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] saveCreatedTag error: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Error',
@@ -426,6 +428,7 @@ class TagsController extends GetxController {
       // ── Refresh transaction counts in parallel ──
       fetchTagTransactionCounts();
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] fetchTags: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Load Failed',
@@ -451,6 +454,7 @@ class TagsController extends GetxController {
         '[TagsController] fetchTagTransactionCounts: ${counts.length} tags with transactions',
       );
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] fetchTagTransactionCounts: $e', stackTrace: stack);
       // Non-critical — silently fail; counts will just show 0
     }
@@ -489,6 +493,7 @@ class TagsController extends GetxController {
         '[TagsController] fetchTransactionsForTag(tagId=$tagId): ${result.length} rows',
       );
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] fetchTransactionsForTag: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Load Failed',
@@ -510,6 +515,7 @@ class TagsController extends GetxController {
       _allTags.assignAll(result);
       tags.assignAll(_applySortAndSearch(_allTags));
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] fetchTagsByBankAccount: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Load Failed',
@@ -580,6 +586,7 @@ class TagsController extends GetxController {
       editingTag = null;
       _closeSheet();
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] updateTag: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Update Failed',
@@ -615,6 +622,7 @@ class TagsController extends GetxController {
         message: 'Tag deleted successfully.',
       );
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[TagsController] deleteTag: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Delete Failed',

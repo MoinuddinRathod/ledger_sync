@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 import '../../../core/service/dialog_service.dart';
 import '../../../core/service/local_db_service/local_db_service.dart';
@@ -67,6 +68,7 @@ class AddEditTransactionController extends GetxController {
 
       _initFormState();
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[_fetchBankAccounts] Error: $e', stackTrace: stack);
     } finally {
       isLoadingBanks.value = false;
@@ -111,7 +113,8 @@ class AddEditTransactionController extends GetxController {
             );
           }
         });
-      } catch (e) {
+      } catch (e, stackTrace) {
+        Sentry.captureException(e, stackTrace: stackTrace);
         log('[AddEditTransaction] TagsController not found: $e');
       }
 
@@ -323,8 +326,9 @@ class AddEditTransactionController extends GetxController {
             ? 'Transaction updated'
             : 'Transaction created',
       );
-    } catch (e, stack) {
-      log('[AddEditTransaction] save error: $e', stackTrace: stack);
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+      log('[AddEditTransaction] save error: $e', stackTrace: stackTrace);
       SnackbarService.showError(
         title: 'Error',
         message: e.toString().replaceFirst('Exception: ', ''),

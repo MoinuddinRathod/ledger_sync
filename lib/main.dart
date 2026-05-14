@@ -8,12 +8,12 @@ import 'core/controllers/theme_controller.dart';
 import 'core/service/local_db_service/local_db_service.dart';
 import 'core/theme/theme.dart';
 import 'features/master_account/services/password_encryption_decryption_service.dart';
-
 import 'core/service/encryption_service.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 
 void main() async {
   try {
-    WidgetsFlutterBinding.ensureInitialized();
+    SentryWidgetsFlutterBinding.ensureInitialized();
     await RiveNative.init();
     await DatabaseHelper.instance.database;
     await GetStorage.init();
@@ -23,20 +23,44 @@ void main() async {
     // Initialize theme controller before app starts
     Get.put(ThemeController(), permanent: true);
 
-    runApp(const MyApp());
+    await SentryFlutter.init((options) {
+      options.dsn =
+          'https://fe453fa495ca186b27799f4b6acab69f@o4511386738950144.ingest.us.sentry.io/4511386745700352';
+      // Set tracesSampleRate to 1.0 to capture 100% of transactions for tracing.
+      // We recommend adjusting this value in production.
+      options.tracesSampleRate = 0.05;
+      // The sampling rate for profiling is relative to tracesSampleRate
+      // Setting to 1.0 will profile 100% of sampled transactions:
+      options.profilesSampleRate = 0.05;
+    }, appRunner: () => runApp(SentryWidget(child: const MyApp())));
   } catch (e, stackTrace) {
+    Sentry.captureException(e, stackTrace: stackTrace);
     debugPrint("Failed to initialize app: $e\n$stackTrace");
-    runApp(
-      MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                "Critical initialization error. Please restart the app or reinstall it if the issue persists.\n\nError: $e",
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.red),
+    await SentryFlutter.init(
+      (options) {
+        options.dsn =
+            'https://fe453fa495ca186b27799f4b6acab69f@o4511386738950144.ingest.us.sentry.io/4511386745700352';
+        // Set tracesSampleRate to 1.0 to capture 100% of transactions for tracing.
+        // We recommend adjusting this value in production.
+        options.tracesSampleRate = 0.05;
+        // The sampling rate for profiling is relative to tracesSampleRate
+        // Setting to 1.0 will profile 100% of sampled transactions:
+        options.profilesSampleRate = 0.05;
+      },
+      appRunner: () => runApp(
+        SentryWidget(
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            home: Scaffold(
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    "Critical initialization error. Please restart the app or reinstall it if the issue persists.\n\nError: $e",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ),
               ),
             ),
           ),

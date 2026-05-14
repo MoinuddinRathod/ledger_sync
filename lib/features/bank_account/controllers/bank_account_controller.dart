@@ -1,6 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
 import '../bank_account_encryption_service.dart';
@@ -102,6 +103,7 @@ class BankAccountController extends GetxController {
         );
       }
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[BankAccountController] fetchBankAccounts: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Load Failed',
@@ -139,7 +141,8 @@ class BankAccountController extends GetxController {
         if (decrypted == plainNumber || decrypted.endsWith(plainNumber)) {
           return acc;
         }
-      } catch (_) {
+      } catch (e, stackTrace) {
+        Sentry.captureException(e, stackTrace: stackTrace);
         // ignore decryption err for individual account
       }
     }
@@ -194,6 +197,7 @@ class BankAccountController extends GetxController {
       bankAccounts.add(model);
       return model;
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[BankAccountController] createAccount: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Add Failed',
@@ -309,6 +313,7 @@ class BankAccountController extends GetxController {
       clearForm();
       _closeSheet();
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[BankAccountController] updateBankAccount: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Update Failed',
@@ -364,6 +369,7 @@ class BankAccountController extends GetxController {
             '${account.bankName} is now ${newState ? "active" : "inactive"}.',
       );
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log('[BankAccountController] toggleAccountActive: $e', stackTrace: stack);
       SnackbarService.showError(
         title: 'Toggle Failed',
@@ -412,6 +418,7 @@ class BankAccountController extends GetxController {
             '${account.bankName} and all related data permanently deleted.',
       );
     } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
       log(
         '[BankAccountController] permanentlyDeleteAccount: $e',
         stackTrace: stack,
@@ -441,7 +448,8 @@ class BankAccountController extends GetxController {
           account.encryptedAccountNumber,
         );
         bankAccountNumberCtrl.text = plain;
-      } catch (_) {
+      } catch (e, stackTrace) {
+        Sentry.captureException(e, stackTrace: stackTrace);
         bankAccountNumberCtrl.text = '';
         SnackbarService.showWarning(
           title: 'Decrypt Error',
@@ -472,7 +480,8 @@ class BankAccountController extends GetxController {
       try {
         final plain = _encService.decryptAccountNumber(encryptedAccountNumber);
         revealedNumbers[encryptedAccountNumber] = plain;
-      } catch (_) {
+      } catch (e, stackTrace) {
+        Sentry.captureException(e, stackTrace: stackTrace);
         SnackbarService.showError(
           title: 'Error',
           message: 'Could not reveal account number.',
