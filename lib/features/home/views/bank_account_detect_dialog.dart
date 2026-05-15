@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/service/local_storage_service.dart';
 import '../../bank_account/controllers/bank_account_controller.dart';
 import '../../../core/service/snackbar_service.dart';
 
@@ -63,6 +64,9 @@ class BankAccountDetectController extends GetxController {
         SnackbarService.showSuccess(
           title: 'Account Created',
           message: 'Successfully linked to your statement.',
+        );
+        bankCtrl.fetchBankAccounts(
+          accountId: LocalStorageService.instance.accountId,
         );
       }
     } catch (e) {

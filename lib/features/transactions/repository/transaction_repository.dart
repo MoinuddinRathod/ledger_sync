@@ -138,6 +138,14 @@ class TransactionRepository {
     return '$accountNumber|$date|${amount.toStringAsFixed(2)}|${type.toUpperCase()}|$normalizedNarration';
   }
 
+  /// Reassign a transaction to [newTagId]. Returns rows updated (0 = not found).
+  Future<int> updateTransactionTag({
+    required int txnId,
+    required int newTagId,
+  }) async {
+    return await _db.updateTransactionTag(txnId: txnId, newTagId: newTagId);
+  }
+
   /// Soft-delete a transaction (sets deleted_at). Returns rows affected.
   Future<int> softDelete(int txnId) async {
     if (txnId <= 0) {

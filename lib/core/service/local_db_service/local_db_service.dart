@@ -737,6 +737,8 @@ class DatabaseHelper {
           t.$TXN_NARRATION,
           t.$TXN_ACCOUNT_ID,
           t.$TXN_TAG_ID,
+          t.$TXN_IS_MANUAL,
+          t.$TXN_REF,
           tg.$TAG_NAME,
           ba.$BANK_NAME,
           ba.$LAST_FOUR_DIGITS,
@@ -818,6 +820,29 @@ class DatabaseHelper {
     } catch (e, stackTrace) {
       Sentry.captureException(e, stackTrace: stackTrace);
       log('softDeleteTransaction error: $e');
+      return -1;
+    }
+  }
+
+  /// Reassign a transaction to a new tag. Returns rows updated (0 = not found).
+  Future<int> updateTransactionTag({
+    required int txnId,
+    required int newTagId,
+  }) async {
+    try {
+      final db = await instance.database;
+      return await db.update(
+        TABLE_TRANSACTIONS,
+        {
+          TXN_TAG_ID: newTagId,
+          UPDATED_AT: DateTime.now().toIso8601String(),
+        },
+        where: '$TXN_ID = ? AND $DELETED_AT IS NULL',
+        whereArgs: [txnId],
+      );
+    } catch (e, stackTrace) {
+      Sentry.captureException(e, stackTrace: stackTrace);
+      log('updateTransactionTag error: $e');
       return -1;
     }
   }

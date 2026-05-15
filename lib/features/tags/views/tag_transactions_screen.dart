@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/service/dialog_service.dart';
+import '../../../core/service/snackbar_service.dart';
 import '../../transactions/models/bank_transaction_model.dart';
 import '../controllers/tags_controller.dart';
 import '../models/tag_model.dart';
@@ -34,8 +34,10 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
         backgroundColor: colorScheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded,
-              color: colorScheme.onSurface),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: colorScheme.onSurface,
+          ),
           onPressed: () => Get.back(),
         ),
         title: Column(
@@ -91,7 +93,7 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
           return _buildEmptyState(colorScheme, tagName);
         }
 
-        return _buildTransactionsList(colorScheme, tag);
+        return _buildTransactionsList(context, colorScheme, tag);
       }),
     );
   }
@@ -100,20 +102,33 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
   // Transaction list
   // ─────────────────────────────────────────────
 
-  Widget _buildTransactionsList(ColorScheme colorScheme, TagModel tag) {
+  Widget _buildTransactionsList(
+    BuildContext context,
+    ColorScheme colorScheme,
+    TagModel tag,
+  ) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
       itemCount: controller.tagTransactions.length,
       itemBuilder: (_, index) {
         final txn = controller.tagTransactions[index];
         return _buildTransactionTile(
+          context: context,
           txn: txn,
           colorScheme: colorScheme,
           dismissKey: ValueKey('tag_txn_${txn.txnId}'),
           onDelete: () {
+            // Guard: imported transactions cannot be deleted
+            if (controller.isImportedTransaction(txn)) {
+              SnackbarService.showWarning(
+                title: 'Cannot Delete',
+                message:
+                    'Imported transactions cannot be deleted. You can change the tag instead.',
+              );
+              return;
+            }
             // Remove locally and refresh counts
-            controller.tagTransactions
-                .removeWhere((t) => t.txnId == txn.txnId);
+            controller.tagTransactions.removeWhere((t) => t.txnId == txn.txnId);
             // Also refresh tag count badge
             controller.fetchTagTransactionCounts();
           },
@@ -127,144 +142,253 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
   // ─────────────────────────────────────────────
 
   Widget _buildTransactionTile({
+    required BuildContext context,
     required BankTransactionModel txn,
     required ColorScheme colorScheme,
     required Key dismissKey,
     required VoidCallback onDelete,
   }) {
     final isCredit = txn.isCredit;
-    final amountColor =
-        isCredit ? Colors.green.shade600 : Colors.red.shade600;
-    final amountPrefix = isCredit ? '+ ' : '– ';
-    final iconBgColor = isCredit
-        ? Colors.green.withValues(alpha: 0.12)
-        : Colors.red.withValues(alpha: 0.10);
-    final iconColor =
-        isCredit ? Colors.green.shade600 : Colors.red.shade600;
-    final formattedAmount = _inrFormatter.format(txn.txnAmount);
-    final formattedDate = _formatDate(txn.txnDate);
+    final amountColor = isCredit
+        ? const Color(0xFF00C853)
+        : const Color(0xFFFF3D00);
+    final isImported = controller.isImportedTransaction(txn);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Dismissible(
         key: dismissKey,
-        direction: DismissDirection.endToStart, // swipe left = delete
-        confirmDismiss: (_) async {
-          return await DialogService.showDeleteDialog(
-            onConfirm: () => Get.back(result: true),
-          );
-        },
-        onDismissed: (_) => onDelete(),
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 24),
-          decoration: BoxDecoration(
-            color: Colors.redAccent,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Icon(Icons.delete_outline_rounded,
-              color: Colors.white, size: 26),
-        ),
+        direction: isImported
+            ? DismissDirection.none
+            : DismissDirection.endToStart,
+        background: _buildDismissibleBackground(),
         child: Container(
-          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: colorScheme.outline.withValues(alpha: 0.1)),
+            borderRadius: BorderRadius.circular(24), // Softer, rounder corners
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: Row(
-            children: [
-              // Type icon
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: iconBgColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isCredit
-                      ? Icons.arrow_downward_rounded
-                      : Icons.arrow_upward_rounded,
-                  color: iconColor,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 14),
-
-              // Narration + bank info
-              Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: InkWell(
+              onTap: () => _showChangeTagSheet(context, txn),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      txn.txnNarration,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          height: 1.3),
-                    ),
-                    const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(
-                          Icons.account_balance_outlined,
-                          size: 11,
-                          color:
-                              colorScheme.onSurface.withValues(alpha: 0.4),
-                        ),
-                        const SizedBox(width: 3),
-                        Expanded(
-                          child: Text(
-                            txn.maskedAccountLabel,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: colorScheme.onSurface
-                                  .withValues(alpha: 0.5),
+                        // Modern Glassmorphic Icon
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: isCredit
+                                  ? [
+                                      Colors.green.withValues(alpha: 0.2),
+                                      Colors.green.withValues(alpha: 0.05),
+                                    ]
+                                  : [
+                                      Colors.red.withValues(alpha: 0.2),
+                                      Colors.red.withValues(alpha: 0.05),
+                                    ],
                             ),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: Icon(
+                            isCredit ? Icons.add_rounded : Icons.remove_rounded,
+                            color: amountColor,
+                            size: 28,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          formattedDate,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colorScheme.onSurface
-                                .withValues(alpha: 0.45),
+                        const SizedBox(width: 16),
+                        // Narration & Meta
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                txn.txnNarration,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  letterSpacing: -0.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _formatDate(txn.txnDate),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.4,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        ),
+                        // Amount
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              _inrFormatter.format(txn.txnAmount),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: amountColor,
+                                letterSpacing: -0.5,
+                              ),
+                            ),
+                            if (isImported)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Imported',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: colorScheme.primary.withValues(
+                                      alpha: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                       ],
+                    ),
+
+                    // Action Footer
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12.0),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.account_balance_wallet_outlined,
+                                size: 14,
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                txn.maskedAccountLabel,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: colorScheme.primary.withValues(
+                                alpha: 0.08,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.label_rounded,
+                                  size: 12,
+                                  color: colorScheme.primary,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Change Tag',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-
-              // Amount
-              Text(
-                '$amountPrefix$formattedAmount',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: amountColor,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDismissibleBackground() {
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(right: 32),
+      margin: const EdgeInsets.only(
+        bottom: 16,
+      ), // Match your card's bottom margin
+      decoration: BoxDecoration(
+        // A vibrant coral-to-red gradient looks more modern than flat red
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFF5252), Color(0xFFFF1744)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.delete_sweep_rounded, color: Colors.white, size: 28),
+          SizedBox(height: 4),
+          Text(
+            'Delete',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────
+  // Change Tag bottom sheet trigger
+  // ─────────────────────────────────────────────
+
+  void _showChangeTagSheet(
+    BuildContext context,
+    BankTransactionModel transaction,
+  ) {
+    Get.bottomSheet(
+      _ChangeTagSheet(transaction: transaction, controller: controller),
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      enableDrag: true,
     );
   }
 
@@ -294,7 +418,8 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Transactions tagged with "{tagName}"\nwill appear here.'.replaceAll('{tagName}', tagName),
+            'Transactions tagged with "{tagName}"\nwill appear here.'
+                .replaceAll('{tagName}', tagName),
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 13,
@@ -311,28 +436,39 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
   // ─────────────────────────────────────────────
 
   Widget _buildErrorState(
-      ColorScheme colorScheme, String title, String message) {
+    ColorScheme colorScheme,
+    String title,
+    String message,
+  ) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline_rounded,
-                size: 56,
-                color: colorScheme.error.withValues(alpha: 0.6)),
+            Icon(
+              Icons.error_outline_rounded,
+              size: 56,
+              color: colorScheme.error.withValues(alpha: 0.6),
+            ),
             const SizedBox(height: 16),
-            Text(title,
-                style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface)),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: colorScheme.onSurface,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: colorScheme.onSurface.withValues(alpha: 0.5))),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                color: colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () => Get.back(),
@@ -354,9 +490,237 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
       return DateFormat('dd MMM yyyy').format(DateTime.parse(raw));
     } catch (_) {}
     try {
-      return DateFormat('dd MMM yyyy')
-          .format(DateFormat('dd/MM/yyyy').parse(raw));
+      return DateFormat(
+        'dd MMM yyyy',
+      ).format(DateFormat('dd/MM/yyyy').parse(raw));
     } catch (_) {}
     return raw;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// _ChangeTagSheet — private bottom sheet for tag selection
+// ═══════════════════════════════════════════════════════════
+
+class _ChangeTagSheet extends StatelessWidget {
+  final BankTransactionModel transaction;
+
+  final TagsController controller;
+
+  const _ChangeTagSheet({required this.transaction, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.65,
+
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+
+        child: Column(
+          children: [
+            // ── Handle bar ──────────────────────────────────────────
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+
+              width: 40,
+
+              height: 4,
+
+              decoration: BoxDecoration(
+                color: colorScheme.onSurface.withValues(alpha: 0.2),
+
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ── Header ─────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+
+                children: [
+                  Text(
+                    'Change Tag',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+
+                      color: colorScheme.onSurface,
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    transaction.txnNarration,
+
+                    maxLines: 1,
+
+                    overflow: TextOverflow.ellipsis,
+
+                    style: TextStyle(
+                      fontSize: 12,
+
+                      color: colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 12),
+
+            // ── Tag list ────────────────────────────────────────────
+            Expanded(
+              child: Obx(() {
+                if (controller.isLoadingFetch.value) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (controller.tags.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No tags available',
+
+                      style: TextStyle(
+                        color: colorScheme.onSurface.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+
+                  itemCount: controller.tags.length,
+
+                  itemBuilder: (context, index) {
+                    final tag = controller.tags[index];
+
+                    final isCurrent = tag.tagId == transaction.txnTagId;
+
+                    return ListTile(
+                      leading: Container(
+                        width: 36,
+
+                        height: 36,
+
+                        decoration: BoxDecoration(
+                          color: isCurrent
+                              ? colorScheme.primary.withValues(alpha: 0.15)
+                              : colorScheme.surfaceContainerHighest,
+
+                          shape: BoxShape.circle,
+                        ),
+
+                        child: Icon(
+                          isCurrent ? Icons.check_circle : Icons.label_outline,
+
+                          size: 18,
+
+                          color: isCurrent
+                              ? colorScheme.primary
+                              : colorScheme.onSurface.withValues(alpha: 0.5),
+                        ),
+                      ),
+
+                      title: Text(
+                        tag.tagName,
+
+                        style: TextStyle(
+                          fontWeight: isCurrent
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+
+                          color: isCurrent
+                              ? colorScheme.primary
+                              : colorScheme.onSurface,
+                        ),
+                      ),
+
+                      subtitle: tag.tagKeywords.isNotEmpty
+                          ? Text(
+                              tag.tagKeywords
+                                  .take(3)
+                                  .map((k) => k['name'].toString())
+                                  .join(', '),
+
+                              maxLines: 1,
+
+                              overflow: TextOverflow.ellipsis,
+
+                              style: TextStyle(
+                                fontSize: 11,
+
+                                color: colorScheme.onSurface.withValues(
+                                  alpha: 0.4,
+                                ),
+                              ),
+                            )
+                          : null,
+
+                      trailing: isCurrent
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+
+                                vertical: 4,
+                              ),
+
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary.withValues(
+                                  alpha: 0.1,
+                                ),
+
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+
+                              child: Text(
+                                'Current',
+
+                                style: TextStyle(
+                                  fontSize: 11,
+
+                                  color: colorScheme.primary,
+
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          : null,
+
+                      onTap: isCurrent
+                          ? null // tapping current tag does nothing
+                          : () {
+                              // Close sheet first, then perform async work
+
+                              Get.back();
+
+                              controller.changeTransactionTag(
+                                transaction: transaction,
+
+                                newTag: tag,
+                              );
+                            },
+                    );
+                  },
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

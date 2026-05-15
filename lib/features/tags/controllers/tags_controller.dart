@@ -396,6 +396,8 @@ class TagsController extends GetxController {
 
   void clearCreateTagState() {
     narration = null;
+    tagNameCtrl.clear();
+    editingTag = null;
     addKeywordCtrl.clear();
     for (final e in keywordList) e.dispose();
     keywordList.clear();
@@ -501,6 +503,58 @@ class TagsController extends GetxController {
       );
     } finally {
       isLoadingTagTxns.value = false;
+    }
+  }
+
+  // ------------------------------------------------------------------ //
+  // CHANGE TRANSACTION TAG
+  // ------------------------------------------------------------------ //
+
+  /// Returns true when [txn] was imported from a bank statement
+  /// (i.e. [isManual] == false → TXN_IS_MANUAL = 0 in the DB).
+  bool isImportedTransaction(BankTransactionModel txn) => !txn.isManual;
+
+  /// Reassigns [transaction] to [newTag], updates the DB, removes the row
+  /// from the current tag's list, and refreshes tag totals.
+  Future<void> changeTransactionTag({
+    required BankTransactionModel transaction,
+    required TagModel newTag,
+  }) async {
+    // Guard: same tag selected — no-op
+    if (transaction.txnTagId == newTag.tagId) return;
+
+    try {
+      final updated = await _txnRepo.updateTransactionTag(
+        txnId: transaction.txnId,
+        newTagId: newTag.tagId!,
+      );
+
+      if (updated <= 0) {
+        SnackbarService.showError(
+          title: 'Update Failed',
+          message: 'Could not change tag. Please try again.',
+        );
+        return;
+      }
+
+      // Remove transaction from current tag's list immediately
+      tagTransactions.removeWhere((t) => t.txnId == transaction.txnId);
+
+      // Refresh tag list so CR/DR totals and counts update for both tags.
+      // fetchTags() calls fetchTagTransactionCounts() internally.
+      await fetchTags();
+
+      SnackbarService.showSuccess(
+        title: 'Tag Changed',
+        message: 'Transaction moved to ${newTag.tagName}.',
+      );
+    } catch (e, stack) {
+      Sentry.captureException(e, stackTrace: stack);
+      log('[TagsController] changeTransactionTag: $e', stackTrace: stack);
+      SnackbarService.showError(
+        title: 'Error',
+        message: 'Something went wrong. Please try again.',
+      );
     }
   }
 
