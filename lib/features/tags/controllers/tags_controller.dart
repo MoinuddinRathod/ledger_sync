@@ -305,6 +305,37 @@ class TagsController extends GetxController {
           bankAccountFk = null;
       }
 
+      // ── Check for duplicate tag with same priority (and bank account if priority 0) ──
+      final priority = mapScopeToPriority(selectedScope.value);
+      final isDuplicate = _allTags.any((tag) {
+        if (tag.tagId == editingTag?.tagId) return false;
+
+        final sameName =
+            tag.tagName.trim().toLowerCase() == tagName.toLowerCase();
+        final samePriority = tag.tagPriority == priority;
+
+        if (sameName && samePriority) {
+          if (priority == 0) {
+            // For Bank Account Level, duplicate is allowed if bank account is different.
+            // So it's a duplicate ONLY if the bank account matches.
+            return tag.tagBankAccountId == bankAccountFk;
+          }
+          // For Global or Party Level, same name + same priority = duplicate.
+          return true;
+        }
+        return false;
+      });
+
+      if (isDuplicate) {
+        SnackbarService.showWarning(
+          title: 'Duplicate Tag',
+          message: priority == 0
+              ? 'A tag with this name already exists for the selected bank account.'
+              : 'A tag with this name already exists at the ${selectedScope.value}.',
+        );
+        return;
+      }
+
       // Save ONE row per tag, packing all keywords
       List<Map<String, dynamic>> keywordsToSave = [];
       for (int i = 0; i < keywordList.length; i++) {
@@ -607,6 +638,34 @@ class TagsController extends GetxController {
           int.tryParse(tagPriorityCtrl.text.trim()) ?? editingTag!.tagPriority,
       tagUpdatedAt: now,
     );
+
+    // ── Check for duplicate tag with same priority ──
+    final isDuplicate = _allTags.any((tag) {
+      if (tag.tagId == editingTag?.tagId) return false;
+
+      final sameName =
+          tag.tagName.trim().toLowerCase() == model.tagName.toLowerCase();
+      final samePriority = tag.tagPriority == model.tagPriority;
+
+      if (sameName && samePriority) {
+        if (model.tagPriority == 0) {
+          // For Bank Account Level, duplicate is allowed if bank account is different.
+          return tag.tagBankAccountId == model.tagBankAccountId;
+        }
+        return true;
+      }
+      return false;
+    });
+
+    if (isDuplicate) {
+      SnackbarService.showWarning(
+        title: 'Duplicate Tag',
+        message: model.tagPriority == 0
+            ? 'A tag with this name already exists for the selected bank account.'
+            : 'A tag with this name already exists at this priority level.',
+      );
+      return;
+    }
 
     final String? error = _validateModel(model);
     if (error != null) {

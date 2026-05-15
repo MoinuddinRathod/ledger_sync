@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import '../../../core/service/dialog_service.dart';
 import '../../../core/service/snackbar_service.dart';
 import '../models/parsed_transaction_model.dart';
 import '../parsers/bank_statement_parser.dart';
@@ -200,8 +201,22 @@ class UploadFileController extends GetxController {
               result.accountNumber!,
             );
             bankAccountNumber = account?.encryptedAccountNumber;
+
             if (account != null) {
-              bankCtrl.fetchBankAccounts(accountId: account.accountId);
+              if (!(account.isActive)) {
+                // show dialogue for confirm with user if he want to active this bank account
+                final bool? shouldActivate =
+                    await DialogService.showActivationDialog(
+                      bankName: account.bankName,
+                    );
+                if (shouldActivate == true) {
+                  await bankCtrl.toggleAccountActive(account);
+                } else {
+                  // User cancelled activation, abort import
+                  return;
+                }
+              }
+              await bankCtrl.fetchBankAccounts(accountId: account.accountId);
             }
           }
 
@@ -212,6 +227,18 @@ class UploadFileController extends GetxController {
           }
         } else {
           bankAccountNumber = account.encryptedAccountNumber;
+          if (!account.isActive) {
+            final bool? shouldActivate =
+                await DialogService.showActivationDialog(
+                  bankName: account.bankName,
+                );
+            if (shouldActivate == true) {
+              await bankCtrl.toggleAccountActive(account);
+            } else {
+              // User cancelled activation, abort import
+              return;
+            }
+          }
         }
       }
 

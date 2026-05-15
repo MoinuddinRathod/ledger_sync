@@ -236,4 +236,22 @@ class DialogService {
       confirmButtonColor: successColor,
     );
   }
+
+  static Future<bool?> showActivationDialog({
+    required String bankName,
+    void Function()? onConfirm,
+  }) {
+    return _showModernDialog(
+      icon: Icons.power_settings_new_rounded,
+      iconColor: Theme.of(Get.context!).colorScheme.primary,
+      iconBgColor: Theme.of(
+        Get.context!,
+      ).colorScheme.primary.withValues(alpha: 0.1),
+      title: 'Activate Account',
+      description:
+          'This $bankName account is currently inactive. Would you like to activate it now to proceed with the import?',
+      confirmText: 'Activate',
+      onConfirm: onConfirm ?? () => Get.back(result: true),
+    );
+  }
 }
