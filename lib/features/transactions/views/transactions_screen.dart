@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/service/dialog_service.dart';
-import '../../bank_account/models/reconciliation_row_model.dart';
 import '../../navbar/widgets/navbar_scroll_listener.dart';
 import '../controller/transaction_controller.dart';
 import '../models/bank_transaction_model.dart';
@@ -431,44 +430,27 @@ class TransactionsScreen extends GetWidget<TransactionsController> {
   // ─────────────────────────────────────────────
 
   Widget _buildTransactionsList(ColorScheme colorScheme) {
-    return Obx(() {
-      final recon = controller.reconciliationRow.value;
-      final txns = controller.transactions;
-
-      return NavbarScrollListener(
-        child: CustomScrollView(
-          slivers: [
-            // Reconciliation banner — shown only when a gap is detected
-            if (recon != null)
-              SliverToBoxAdapter(child: _ReconciliationBanner(model: recon)),
-
-            // Transaction list
-            SliverList(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final txn = txns[index];
-                return Padding(
-                  padding: EdgeInsets.only(
-                    left: 16,
-                    right: 16,
-                    top: index == 0 ? 4 : 0,
-                    bottom: 10,
-                  ),
-                  child: _buildTransactionTile(
-                    txn: txn,
-                    colorScheme: colorScheme,
-                    dismissKey: ValueKey(txn.txnId),
-                    onDelete: () => controller.deleteTransaction(txn: txn),
-                  ),
-                );
-              }, childCount: txns.length),
-            ),
-
-            // Bottom padding for floating navbar
-            const SliverToBoxAdapter(child: SizedBox(height: 100)),
-          ],
+    final txns = controller.transactions;
+    return NavbarScrollListener(
+      child: ListView.builder(
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          bottom: 100,
+          top: 4,
         ),
-      );
-    });
+        itemCount: txns.length,
+        itemBuilder: (_, index) {
+          final txn = txns[index];
+          return _buildTransactionTile(
+            txn: txn,
+            colorScheme: colorScheme,
+            dismissKey: ValueKey(txn.txnId),
+            onDelete: () => controller.deleteTransaction(txn: txn),
+          );
+        },
+      ),
+    );
   }
 
   // ─────────────────────────────────────────────
@@ -496,7 +478,9 @@ class TransactionsScreen extends GetWidget<TransactionsController> {
       decoration: BoxDecoration(
         color: colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.1),
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -656,133 +640,5 @@ class TransactionsScreen extends GetWidget<TransactionsController> {
             )
           : tileContent,
     );
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────────
-// Reconciliation Banner
-// ────────────────────────────────────────────────────────────────────────
-
-/// A virtual banner shown at the TOP of the transaction list when the
-/// stored [BankAccountModel.currentBalance] differs from the balance
-/// computed from imported transactions by more than ₹1.
-class _ReconciliationBanner extends StatelessWidget {
-  final ReconciliationRowModel model;
-
-  const _ReconciliationBanner({required this.model});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final color = model.isCredit ? Colors.green : Colors.red;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
-      ),
-      child: Row(
-        children: [
-          // Circular icon
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              model.isCredit
-                  ? Icons.arrow_downward_rounded
-                  : Icons.arrow_upward_rounded,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // Label + description
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    // WRAPPED IN FLEXIBLE TO PREVENT OVERFLOW
-                    Flexible(
-                      child: Text(
-                        model.label,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'Reconciliation',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  model.description,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colorScheme.onSurface.withValues(alpha: 0.55),
-                    height: 1.4,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow
-                      .ellipsis, // Added overflow protection here too
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          // Amount
-          Text(
-            '${model.isCredit ? '+' : '-'}₹${_formatAmount(model.amount)}',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Formats large amounts as L (lakh) or Cr (crore).
-  String _formatAmount(double amount) {
-    if (amount >= 10000000) {
-      return '${(amount / 10000000).toStringAsFixed(2)}Cr';
-    } else if (amount >= 100000) {
-      return '${(amount / 100000).toStringAsFixed(2)}L';
-    }
-    return amount.toStringAsFixed(2);
   }
 }

@@ -27,7 +27,7 @@ class DatabaseHelper {
     String path = join(await getDatabasesPath(), LEDGER_SYNC_DB);
     return await openDatabase(
       path,
-      version: 2,
+      version: 1,
       onCreate: (db, version) async {
         await db.execute('PRAGMA foreign_keys = ON');
 
@@ -54,7 +54,6 @@ class DatabaseHelper {
         $ACCOUNT_HOLDER_NAME TEXT NOT NULL,
         $ACCOUNT_TYPE TEXT NOT NULL,
         $CURRENT_BALANCE REAL NOT NULL,
-        $DECLARED_BALANCE REAL NOT NULL DEFAULT 0,
         $DATE_ADDED TEXT NOT NULL,
         $CREATED_AT TEXT NOT NULL,
         $UPDATED_AT TEXT,
@@ -173,18 +172,6 @@ class DatabaseHelper {
 
       onOpen: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
-      },
-
-      onUpgrade: (db, oldVersion, newVersion) async {
-        // v1 → v2: add declared_balance column to bank_accounts.
-        // This column stores the user-declared real bank balance and is
-        // never overwritten by recomputeAndSave.
-        if (oldVersion < 2) {
-          await db.execute(
-            'ALTER TABLE $TABLE_BANK_ACCOUNTS '
-            'ADD COLUMN $DECLARED_BALANCE REAL NOT NULL DEFAULT 0',
-          );
-        }
       },
     );
   }
@@ -888,9 +875,7 @@ class DatabaseHelper {
       // Bank accounts total
       final bankResult = await db.rawQuery(
         '''
-      SELECT COALESCE(SUM(
-        CASE WHEN $DECLARED_BALANCE > 0 THEN $DECLARED_BALANCE ELSE $CURRENT_BALANCE END
-      ), 0.0) as bank_total
+      SELECT COALESCE(SUM($CURRENT_BALANCE), 0.0) as bank_total
       FROM $TABLE_BANK_ACCOUNTS
       WHERE $ACCOUNT_ID = ? AND $DELETED_AT IS NULL
     ''',

@@ -5,12 +5,8 @@ import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
-import '../../../core/service/local_db_service/local_db_service.dart';
 import '../../../core/service/local_storage_service.dart';
 import '../../../core/service/snackbar_service.dart';
-import '../../bank_account/models/bank_account_model.dart';
-import '../../bank_account/models/reconciliation_row_model.dart';
-import '../../bank_account/repository/bank_account_repository.dart';
 import '../../cash_wallet/repository/cash_wallet_repository.dart';
 import '../models/bank_transaction_model.dart';
 import '../repository/transaction_repository.dart';
@@ -19,16 +15,11 @@ class TransactionsController extends GetxController {
   // ── Dependencies ────────────────────────────────────
   final TransactionRepository _repo = TransactionRepository();
   final CashWalletRepository _cashRepo = CashWalletRepository();
-  final BankAccountRepository _bankRepo = BankAccountRepository();
-  final DatabaseHelper _db = DatabaseHelper.instance;
 
   // ── Encrypted account number (set before navigation) ──
   /// The encrypted bank_account_number FK that scopes this screen.
   /// Null means "show all accounts" (future use — currently per-account).
   String? encryptedAccountNumber;
-
-  /// The resolved bank account model — populated on first fetch.
-  BankAccountModel? _bankAccount;
 
   // ── State ──────────────────────────────────────────
   final RxList<BankTransactionModel> _allTransactions =
@@ -37,11 +28,6 @@ class TransactionsController extends GetxController {
       <BankTransactionModel>[].obs;
 
   final RxBool isLoadingFetch = false.obs;
-
-  // ── Reconciliation ─────────────────────────────────
-  /// Non-null when a balance gap is detected for this account.
-  final Rxn<ReconciliationRowModel> reconciliationRow =
-      Rxn<ReconciliationRowModel>();
 
   // ── Search ─────────────────────────────────────────
   final RxBool isSearching = false.obs;
@@ -98,12 +84,6 @@ class TransactionsController extends GetxController {
       final data = await _repo.getByAccount(acct);
       _allTransactions.assignAll(data);
       _applyFilters();
-
-      // Resolve bank account model once (cache it for subsequent refreshes)
-      _bankAccount ??= await _resolveBankAccount(acct);
-
-      // Compute reconciliation gap after transactions are loaded
-      await computeReconciliation();
 
       log('[TransactionsController] fetched ${data.length} transactions');
     } catch (e, stackTrace) {
@@ -335,104 +315,4 @@ class TransactionsController extends GetxController {
       .fold(0.0, (s, t) => s + t.txnAmount);
 
   int get accountId => LocalStorageService.instance.accountId;
-
-  // ─────────────────────────────────────────────
-  // Reconciliation
-  // ─────────────────────────────────────────────
-
-  /// Resolves the BankAccountModel for [encryptedAccountNumber].
-  /// Returns null if not found or on error.
-  Future<BankAccountModel?> _resolveBankAccount(String encAcct) async {
-    try {
-      final id = LocalStorageService.instance.accountId;
-      if (id <= 0) return null;
-      final accounts = await _bankRepo.getAllBankAccounts(accountId: id);
-      return accounts.firstWhereOrNull(
-        (a) => a.encryptedAccountNumber == encAcct,
-      );
-    } catch (e) {
-      log('[TransactionsController] _resolveBankAccount error: $e');
-      return null;
-    }
-  }
-
-  /// Computes the gap between the user-declared real balance and the
-  /// DB-computed balance (openingBalance + credits − debits).
-  ///
-  /// Logic:
-  /// - [declaredBalance] = what the user typed when creating/editing the account.
-  ///   This is NEVER overwritten by recomputeAndSave, so it stays as the "truth".
-  /// - [currentBalance] = recomputed after every import (always = computed).
-  /// - If declaredBalance == 0: user never declared a real balance → no banner.
-  /// - If declaredBalance > 0: compare vs computeCurrentBalance() to find gap.
-  ///
-  /// Scenario A (normal import cycle, no manual balance):
-  ///   declaredBalance == 0 → guard triggers → no banner.
-  ///
-  /// Scenario B (user declared ₹5000, imported old statement → computed ₹1000):
-  ///   difference = 5000 - 1000 = 4000 → green banner "+₹4000 untracked credits".
-  ///
-  /// Scenario C (user imports latest statement, computed ≈ declared):
-  ///   difference < ₹1 → treated as balanced → no banner.
-  Future<void> computeReconciliation() async {
-    // Always re-fetch so we pick up the latest declaredBalance after edits.
-    if (encryptedAccountNumber != null) {
-      _bankAccount = await _resolveBankAccount(encryptedAccountNumber!);
-    }
-    final account = _bankAccount;
-
-    // Guard: no account model available
-    if (account == null) {
-      reconciliationRow.value = null;
-      return;
-    }
-
-    // Guard: user never declared a real balance → nothing to reconcile.
-    // Users who just import continuously never set declaredBalance, so
-    // this keeps the banner hidden for them (their computed IS the truth).
-    if (account.declaredBalance == 0) {
-      reconciliationRow.value = null;
-      return;
-    }
-
-    // Guard: no transactions means nothing to reconcile
-    if (_allTransactions.isEmpty) {
-      reconciliationRow.value = null;
-      return;
-    }
-
-    try {
-      // Guard: no import sessions recorded means opening balance unknown
-      final opening = await _db.getEarliestOpeningBalance(
-        account.encryptedAccountNumber,
-      );
-      if (opening == null) {
-        reconciliationRow.value = null;
-        return;
-      }
-
-      // Compute balance from ALL imported transactions
-      final computed = await _db.computeCurrentBalance(
-        account.encryptedAccountNumber,
-      );
-
-      // Gap = real declared balance minus what transactions explain
-      final difference = account.declaredBalance - computed;
-
-      // Guard: floating-point noise threshold (< ₹1)
-      if (difference.abs() < 1.0) {
-        reconciliationRow.value = null;
-        return;
-      }
-
-      reconciliationRow.value = ReconciliationRowModel(
-        amount: difference.abs(),
-        isCredit: difference > 0,
-      );
-    } catch (e) {
-      log('[TransactionsController] computeReconciliation error: $e');
-      reconciliationRow.value = null;
-    }
-  }
 }
-
