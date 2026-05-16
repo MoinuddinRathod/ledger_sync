@@ -198,7 +198,9 @@ class TagTransactionsScreen extends GetWidget<TagsController> {
                             borderRadius: BorderRadius.circular(18),
                           ),
                           child: Icon(
-                            isCredit ? Icons.add_rounded : Icons.remove_rounded,
+                            isCredit
+                                ? Icons.arrow_downward_rounded
+                                : Icons.arrow_upward_rounded,
                             color: amountColor,
                             size: 28,
                           ),
