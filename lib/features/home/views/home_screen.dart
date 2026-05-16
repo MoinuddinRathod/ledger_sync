@@ -885,7 +885,13 @@ class HomeScreen extends GetWidget<HomeController> {
                                       symbol: '₹',
                                       decimalDigits: 2,
                                       locale: 'en_IN',
-                                    ).format(acc.currentBalance),
+                                    ).format(
+                                      // Show declared (real) balance if user set one,
+                                      // otherwise show computed balance from imports.
+                                      acc.declaredBalance > 0
+                                          ? acc.declaredBalance
+                                          : acc.currentBalance,
+                                    ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(

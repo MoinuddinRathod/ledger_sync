@@ -432,7 +432,7 @@ class TagsController extends GetxController {
     addKeywordCtrl.clear();
     for (final e in keywordList) e.dispose();
     keywordList.clear();
-    // ✅ FIX: reset safely
+    // FIX: reset safely
     selectedScope.value = hasNoBankAccounts ? 'Global' : 'Bank Account Level';
     selectedBankAccount.value = null;
   }

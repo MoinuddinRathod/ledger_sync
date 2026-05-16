@@ -173,6 +173,7 @@ class BankAccountController extends GetxController {
       accountHolderName: holderName.trim(),
       accountType: accountType,
       currentBalance: balance,
+      declaredBalance: balance, // preserve user-declared real balance
       dateAdded: now,
       createdAt: now,
       updatedAt: now,
@@ -264,6 +265,7 @@ class BankAccountController extends GetxController {
       encryptedAcNum = encrypted;
     }
 
+    final balance = double.tryParse(balanceCtrl.text) ?? 0.0;
     final model = BankAccountModel(
       encryptedAccountNumber: encryptedAcNum,
       lastFourDigits: lastFour,
@@ -271,7 +273,8 @@ class BankAccountController extends GetxController {
       bankName: bankNameCtrl.text.trim(),
       accountHolderName: holderNameCtrl.text.trim(),
       accountType: selectedAccountType.value,
-      currentBalance: double.tryParse(balanceCtrl.text) ?? 0.0,
+      currentBalance: editingAccount?.currentBalance ?? balance,
+      declaredBalance: balance, // user re-declares real balance on edit
       dateAdded: editingAccount?.dateAdded ?? now,
       createdAt: editingAccount?.createdAt ?? now,
       updatedAt: now,
@@ -440,7 +443,12 @@ class BankAccountController extends GetxController {
     if (account != null) {
       bankNameCtrl.text = account.bankName;
       holderNameCtrl.text = account.accountHolderName;
-      balanceCtrl.text = account.currentBalance.toString();
+      // Pre-fill with declared balance if user set one, else fall back to
+      // the computed currentBalance so the field is never shown as 0.
+      final displayBalance = account.declaredBalance > 0
+          ? account.declaredBalance
+          : account.currentBalance;
+      balanceCtrl.text = displayBalance.toStringAsFixed(2);
       selectedAccountType.value = account.accountType;
       // Decrypt only for the edit form
       try {

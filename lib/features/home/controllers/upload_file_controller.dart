@@ -203,6 +203,7 @@ class UploadFileController extends GetxController {
             bankAccountNumber = account?.encryptedAccountNumber;
 
             if (account != null) {
+              await bankCtrl.fetchBankAccounts(accountId: account.accountId);
               if (!(account.isActive)) {
                 // show dialogue for confirm with user if he want to active this bank account
                 final bool? shouldActivate =
@@ -211,12 +212,14 @@ class UploadFileController extends GetxController {
                     );
                 if (shouldActivate == true) {
                   await bankCtrl.toggleAccountActive(account);
+                  await bankCtrl.fetchBankAccounts(
+                    accountId: account.accountId,
+                  );
                 } else {
                   // User cancelled activation, abort import
                   return;
                 }
               }
-              await bankCtrl.fetchBankAccounts(accountId: account.accountId);
             }
           }
 

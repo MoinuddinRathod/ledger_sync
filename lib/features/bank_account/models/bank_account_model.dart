@@ -9,7 +9,11 @@ class BankAccountModel {
   bankAccountNumber; // NOT stored in DB — only in RAM after eye-tap decrypt
   String accountHolderName;
   String accountType;
+  /// Recomputed balance — updated by recomputeAndSave after every import.
   double currentBalance;
+  /// User-declared real bank balance — set only when user manually enters it.
+  /// NEVER overwritten by recomputeAndSave. 0 means not declared.
+  double declaredBalance;
   String dateAdded;
   String createdAt;
   String? updatedAt;
@@ -25,6 +29,7 @@ class BankAccountModel {
     required this.accountHolderName,
     required this.accountType,
     this.currentBalance = 0,
+    this.declaredBalance = 0,
     required this.dateAdded,
     required this.createdAt,
     this.updatedAt,
@@ -44,6 +49,7 @@ class BankAccountModel {
       ACCOUNT_HOLDER_NAME: accountHolderName,
       ACCOUNT_TYPE: accountType,
       CURRENT_BALANCE: currentBalance,
+      DECLARED_BALANCE: declaredBalance,
       DATE_ADDED: dateAdded,
       CREATED_AT: createdAt,
       UPDATED_AT: updatedAt,
@@ -66,6 +72,7 @@ class BankAccountModel {
       accountHolderName: map[ACCOUNT_HOLDER_NAME] as String,
       accountType: map[ACCOUNT_TYPE] as String,
       currentBalance: (map[CURRENT_BALANCE] as num?)?.toDouble() ?? 0.0,
+      declaredBalance: (map[DECLARED_BALANCE] as num?)?.toDouble() ?? 0.0,
       dateAdded: map[DATE_ADDED] as String,
       createdAt: map[CREATED_AT] as String,
       updatedAt: map[UPDATED_AT] as String?,
@@ -86,6 +93,7 @@ class BankAccountModel {
     String? accountHolderName,
     String? accountType,
     double? currentBalance,
+    double? declaredBalance,
     String? dateAdded,
     String? createdAt,
     String? updatedAt,
@@ -102,6 +110,7 @@ class BankAccountModel {
       accountHolderName: accountHolderName ?? this.accountHolderName,
       accountType: accountType ?? this.accountType,
       currentBalance: currentBalance ?? this.currentBalance,
+      declaredBalance: declaredBalance ?? this.declaredBalance,
       dateAdded: dateAdded ?? this.dateAdded,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -123,6 +132,7 @@ class BankAccountModel {
         'accountHolderName: $accountHolderName, '
         'accountType: $accountType, '
         'currentBalance: $currentBalance, '
+        'declaredBalance: $declaredBalance, '
         'dateAdded: $dateAdded, '
         'createdAt: $createdAt, '
         'updatedAt: $updatedAt, '

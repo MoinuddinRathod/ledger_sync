@@ -239,7 +239,7 @@ class TagsScreen extends GetWidget<TagsController> {
             colorScheme: colorScheme,
             dismissKey: ObjectKey(tag),
             onEdit: () {
-              controller.initForm(tag); // ✅ preload data
+              controller.initForm(tag); // preload data
 
               Get.toNamed(AppRoutes.tagAddEdit);
             },
@@ -377,23 +377,14 @@ class TagsScreen extends GetWidget<TagsController> {
     final borderRadius = BorderRadius.circular(20);
 
     return Container(
-      decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        boxShadow: [
-          BoxShadow(
-            color: colorScheme.shadow.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      decoration: BoxDecoration(borderRadius: borderRadius),
       child: ClipRRect(
         borderRadius: borderRadius,
         child: Dismissible(
           key: dismissKey,
           direction: DismissDirection.horizontal,
 
-          /// 🔥 Swipe Logic (unchanged)
+          /// Swipe Logic (unchanged)
           confirmDismiss: (direction) async {
             if (direction == DismissDirection.startToEnd) {
               onEdit();
@@ -417,7 +408,7 @@ class TagsScreen extends GetWidget<TagsController> {
           background: _buildEditBg(),
           secondaryBackground: _buildDeleteBg(),
 
-          /// 🔥 FINAL CHILD
+          /// FINAL CHILD
           child: Material(
             color: colorScheme.surface,
             child: InkWell(
@@ -429,7 +420,7 @@ class TagsScreen extends GetWidget<TagsController> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
 
-                /// 🔥 USE YOUR UI HERE
+                /// USE YOUR UI HERE
                 child: _TagTileContent(tag: tag, colorScheme: colorScheme),
               ),
             ),

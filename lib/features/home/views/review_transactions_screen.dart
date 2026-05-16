@@ -65,7 +65,7 @@ import '../controllers/review_transactions_controller.dart';
 
 //     // Skip if it looks like a date fragment (jan, feb, 2024, etc.)
 //     if (RegExp(
-//       r^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}),
+//       r'^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4})$',
 //     ).hasMatch(token))
 //       continue;
 
@@ -79,7 +79,6 @@ import '../controllers/review_transactions_controller.dart';
 //   return result.take(10).toList();
 // }
 
-/// ----- new keyword build method (first try)
 List<String> _buildKeywordPreview(MappableTransaction txn) {
   final narration = txn.narration.trim();
   final result = <String>{};
@@ -108,7 +107,6 @@ List<String> _buildKeywordPreview(MappableTransaction txn) {
     'dep',
     'wdl',
     'tfr',
-    'trf',
     'upi',
     'neft',
     'rtgs',
@@ -148,125 +146,121 @@ List<String> _buildKeywordPreview(MappableTransaction txn) {
     'value',
   };
 
-  bool isMeaningful(String s) =>
-      s.length >= 3 &&
-      !RegExp(r'^\d+$').hasMatch(s) &&
-      !noiseTokens.contains(s);
+  // A segment is "noise" if it's a noise token OR pure digits OR too short
+  bool isNoise(String s) =>
+      s.isEmpty ||
+      s.length < 2 ||
+      RegExp(r'^\d+$').hasMatch(s) ||
+      noiseTokens.contains(s.toLowerCase());
 
-  // ── STEP 1: Slash-separated segments with position-aware adjacency ────
-  // Key fix: track ORIGINAL index so numerics/noise are skipped but
-  // adjacency (index diff == 1) is still based on the original position.
-  // pos/dr/45285454/store/mumbai → store(3), mumbai(4) → diff 1 → paired ✓
-  // pos(0) + mumbai(4) → diff 4 → never paired ✗
-  final slashWords = narration.split(RegExp(r'\s+'));
+  bool isMeaningful(String s) => !isNoise(s);
 
-  for (final word in slashWords) {
-    if (!word.contains('/')) continue;
+  // ── STEP 1: Process each whitespace-separated chunk ───────────────────
+  // A "chunk" may be slash-delimited: UPI/DR/559309896372/M/S.LUCK/ICIC/903333
+  // We find RUNS of consecutive meaningful segments (by original index)
+  // and emit singles + pairs + triplets from those runs only.
 
-    final rawSegments = word
-        .split('/')
-        .map((s) => s.trim().toLowerCase())
-        .toList();
+  final chunks = narration.split(RegExp(r'\s+'));
 
-    // Build list of (originalIndex, segment) for meaningful segments only
-    final indexed = <({int idx, String seg})>[];
-    for (int i = 0; i < rawSegments.length; i++) {
-      final s = rawSegments[i];
-      if (s.isNotEmpty && isMeaningful(s)) {
-        indexed.add((idx: i, seg: s));
+  for (final chunk in chunks) {
+    if (!chunk.contains('/')) {
+      // Plain word — handle in step 3
+      continue;
+    }
+
+    final rawParts = chunk.split('/');
+
+    // Tag each part with its original index and cleaned value
+    // We keep the raw form (lowercased) for output — preserving dots, etc.
+    final tagged = <({int idx, String raw})>[];
+    for (int i = 0; i < rawParts.length; i++) {
+      final raw = rawParts[i].trim().toLowerCase();
+      if (raw.isNotEmpty && isMeaningful(raw)) {
+        tagged.add((idx: i, raw: raw));
       }
     }
 
-    // Add individual meaningful segments
-    for (final item in indexed) {
-      result.add(item.seg);
-    }
+    if (tagged.isEmpty) continue;
 
-    // Add pairs — ONLY when original indices are adjacent (diff == 1)
-    for (int i = 0; i < indexed.length - 1; i++) {
-      final a = indexed[i];
-      final b = indexed[i + 1];
-      if (b.idx - a.idx == 1) {
-        result.add('${a.seg}/${b.seg}');
+    // Find consecutive runs (original index diff == 1)
+    // e.g. tagged = [(4,"m"),(5,"s.luck"),(6,"icic")] → one run of 3
+    final runs = <List<({int idx, String raw})>>[];
+    var currentRun = [tagged.first];
+
+    for (int i = 1; i < tagged.length; i++) {
+      if (tagged[i].idx - tagged[i - 1].idx == 1) {
+        // consecutive — extend current run
+        currentRun.add(tagged[i]);
+      } else {
+        // gap — save current run, start new one
+        runs.add(currentRun);
+        currentRun = [tagged[i]];
       }
     }
+    runs.add(currentRun);
 
-    // Add triplets — ONLY when all three original indices are consecutive
-    for (int i = 0; i < indexed.length - 2; i++) {
-      final a = indexed[i];
-      final b = indexed[i + 1];
-      final c = indexed[i + 2];
-      if (b.idx - a.idx == 1 && c.idx - b.idx == 1) {
-        result.add('${a.seg}/${b.seg}/${c.seg}');
+    // From each run, emit: singles, pairs, triplets (sliding window)
+    for (final run in runs) {
+      // Singles
+      for (final item in run) {
+        result.add(item.raw);
+      }
+
+      // Pairs (consecutive within run)
+      for (int i = 0; i < run.length - 1; i++) {
+        result.add('${run[i].raw}/${run[i + 1].raw}');
+      }
+
+      // Triplets (consecutive within run)
+      for (int i = 0; i < run.length - 2; i++) {
+        result.add('${run[i].raw}/${run[i + 1].raw}/${run[i + 2].raw}');
+      }
+
+      // Full run if longer than 3 and under a sane length
+      if (run.length > 3) {
+        final full = run.map((e) => e.raw).join('/');
+        if (full.length <= 60) result.add(full);
       }
     }
   }
 
-  // ── STEP 2: Cross-segment name combinations ───────────────────────────
-  // e.g. SARFARAJ/SBIN ... rathod safu → "sarfaraj/sbin/rathod safu"
-  final slashGroupPattern = RegExp(
-    r'([A-Za-z][A-Za-z0-9]*(?:/[A-Za-z][A-Za-z0-9]*)+)',
-  );
-
-  // ── STEP 2: Cross-segment name combinations ───────────────────────────
-  for (final match in slashGroupPattern.allMatches(narration)) {
-    // Skip if the slash group has no meaningful segment — e.g. "pos/cr", "upi/dr"
-    final groupSegments = match
-        .group(0)!
-        .toLowerCase()
-        .split('/')
-        .where((s) => isMeaningful(s))
-        .toList();
-
-    if (groupSegments.isEmpty) continue; // ← nothing useful in the slash group
-
-    final afterMatch = narration.substring(match.end).trim();
-
-    final afterWords = afterMatch
-        .split(RegExp(r'[\s/]+'))
-        .map((w) => w.replaceAll(RegExp(r'[^a-zA-Z]'), '').toLowerCase())
-        .where((w) => w.length >= 3 && !noiseTokens.contains(w))
-        .take(2)
-        .toList();
-
-    if (afterWords.isNotEmpty) {
-      final slashGroup = match.group(0)!.toLowerCase();
-      result.add('$slashGroup/${afterWords.join(' ')}');
-      result.add(afterWords.join(' '));
-    }
-  }
-
-  // ── STEP 3: Plain word extraction ────────────────────────────────────
-  final cleaned = narration
-      .replaceAll(RegExp(r'\b\d+\b'), ' ')
-      .replaceAll(RegExp(r'@[A-Za-z0-9._]+'), ' ')
-      .replaceAll(RegExp(r'[/\\|]'), ' ')
-      .replaceAll(RegExp(r'[^\w\s]'), ' ')
+  // ── STEP 2: Plain word extraction (non-slash) ─────────────────────────
+  // Clean narration: remove digits, special chars, slash-chunks already handled
+  final plainText = narration
+      .replaceAll(RegExp(r'\S*\/\S*'), ' ') // remove slash-chunks entirely
+      .replaceAll(RegExp(r'@\S+'), ' ') // remove @handles
+      .replaceAll(RegExp(r'\b\d+\b'), ' ') // remove standalone numbers
+      .replaceAll(RegExp(r'[^\w\s]'), ' ') // remove punctuation
       .toLowerCase();
 
-  final words = cleaned
+  final words = plainText
       .split(RegExp(r'\s+'))
       .map((w) => w.trim())
-      .where((w) => w.length >= 3 && isMeaningful(w))
+      .where((w) => isMeaningful(w))
       .toList();
 
+  // Singles
   for (final w in words) {
     result.add(w);
   }
 
+  // Adjacent pairs from plain words
   for (int i = 0; i < words.length - 1; i++) {
     result.add('${words[i]} ${words[i + 1]}');
   }
 
-  // ── STEP 4: Filter and rank ───────────────────────────────────────────
-  final filtered = result
-      .where((kw) => kw.length >= 3 && !noiseTokens.contains(kw))
-      .where((kw) {
-        final parts = kw.split(RegExp(r'[/\s]'));
-        return parts.any((p) => p.length >= 3 && !noiseTokens.contains(p));
-      })
-      .toList();
+  // ── STEP 3: Filter ────────────────────────────────────────────────────
+  // Remove keywords where EVERY part is noise (catches "upi/dr" etc.)
+  final filtered = result.where((kw) {
+    if (kw.length < 2) return false;
+    if (noiseTokens.contains(kw)) return false;
 
+    // All slash/space parts must not ALL be noise
+    final parts = kw.split(RegExp(r'[/\s]'));
+    return parts.any((p) => isMeaningful(p));
+  }).toList();
+
+  // ── STEP 4: Rank ──────────────────────────────────────────────────────
   filtered.sort((a, b) => _kwScore(b).compareTo(_kwScore(a)));
 
   return filtered.toSet().toList().take(12).toList();
@@ -274,9 +268,9 @@ List<String> _buildKeywordPreview(MappableTransaction txn) {
 
 int _kwScore(String kw) {
   int score = 0;
-  if (kw.contains('/')) score += 3;
-  if (kw.contains(' ')) score += 2;
-  score += kw.length ~/ 4;
+  if (kw.contains('/')) score += 3; // slash combos = high value
+  if (kw.contains(' ')) score += 2; // word pairs = medium value
+  score += kw.length ~/ 4; // longer = slightly better
   return score;
 }
 
@@ -973,7 +967,7 @@ class _AccountSelectionSheet extends StatelessWidget {
               child: ListView.builder(
                 itemCount: controller.tags.length + 1,
                 itemBuilder: (context, index) {
-                  /// ✅ FIRST ITEM → CREATE NEW TAG
+                  ///  FIRST ITEM → CREATE NEW TAG
                   if (index == 0) {
                     return ListTile(
                       leading: const Icon(Icons.add, color: Colors.blue),
@@ -983,13 +977,12 @@ class _AccountSelectionSheet extends StatelessWidget {
                       ),
                       onTap: () {
                         Get.back();
-
                         _openCreateTagSheet(context);
                       },
                     );
                   }
 
-                  /// ✅ EXISTING TAGS
+                  ///  EXISTING TAGS
                   final tag = controller.tags[index - 1];
 
                   final keywordsStr = tag.tagKeywords
